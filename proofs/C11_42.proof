@@ -1,0 +1,24 @@
+# proof with -Sprop false; 
+# failure with -Sprop true:
+#   lo-parallel line 17
+#   lo-parallel line 18
+#   inclusion line 20
+#   inheritance line 22
+
+{aa:x=y=0} 
+--------------- 
+{* lo aa:x=y=0 *}                               a:r1:=y; 
+if {* lo a:r1=x=0 *}                            bb:r1=42 
+then  
+    {* lo bb(t):false *}                        b:x:=r1 
+fi  
+{* lo b:false *}\/{* lo bb(f):r1=x=0 *}
+--------------- 
+{* lo aa:x=y=0 *}                               c:r1 := x; 
+if {* lo c:r1=y=0 *}                        cc:r1=42 
+then  
+    {* go cc(t): LocalSpec => r1=y=0/\r1=42 *}  d: y := 42 
+fi  
+{* lo d:false *}\/{* lo cc(f):r1=y=0 *}
+--------------- 
+{zz: 0:r1=1:r1=x=y=0}

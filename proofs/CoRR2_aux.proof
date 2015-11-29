@@ -1,0 +1,17 @@
+{ aa: x=0/\!aux1/\!aux2 }
+------------------
+guarantee [ _B(!aux1) | x,aux1:=1,true ]
+{* lo aa: _B(!aux1) *}                      a: x,aux1:=1,true
+------------------
+guarantee [ _B(!aux2) | x,aux2:=2,true ]
+{* lo aa: _B(!aux2) *}                      b: x,aux2:=2,true
+------------------
+{* lo aa: (x=1=>aux1)/\(x=2=>aux2) *}   c: r1:=x;
+{* lo c: (r1=1=>aux1)/\(x=2=>aux2) *}   d: r2:=x 
+{* lo d: r1=1/\r2=2=>aux1/\aux2/\x=2 *}
+------------------
+{* lo aa: (x=1=>aux1)/\(x=2=>aux2) *}   e: r1:=x;
+{* lo e: (r1=2=>aux2)/\(x=1=>aux1) *}   f: r2:=x 
+{* lo f: r1=2/\r2=1=>aux1/\aux2/\x=1 *}
+-------------------
+{zz: !(2:r1=1/\2:r2=2/\3:r1=2/\3:r2=1)}

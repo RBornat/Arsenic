@@ -1,0 +1,2 @@
+(_U(x=1) since y=1)/\ouat(x=0/\y=2)=>ouat(y=1/\ouat(y=2));
+ouat(y=1/\ouat(y=2))=>_c(y,2,1)

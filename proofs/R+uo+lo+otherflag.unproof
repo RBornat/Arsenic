@@ -1,0 +1,21 @@
+{ aa: x=y=f=0 }
+-------------------------
+guarantee [ true | x:=1; _B(x=1) | y:=1]
+
+{* lo aa: true *}                           a: x:=1;
+{* lo aa: sofar(y!=1); uo a: _U(x=1) *}     b: y:=1;  
+{* lo b : _U(x=1) since y=1; 
+   lo aa: f=1=>ouat(x=0/\y=2) *}            x: r1:=f
+{* lo x: r1=1=>(_U(x=1) since y=1)/\ouat(x=0/\y=2)/\_c(y,2,1) *}
+-------------------------
+guarantee [ true | y:=2; _B(ouat(x=0)/\ouat(y=2)) | f:=1 ]
+
+{* lo aa: sofar(y!=2) *}                    c: y:=2;
+{* lo c : y=2\/y=1/\x=1/\_c(y,2,1) *}       d: r1:=x;
+if {* lo d : r1=0=>ouat(x=0/\y=2) *}    dd: r1=0 
+then
+    {* bo dd(t) {ouat(x=0/\y=2)}: 
+            _B(ouat(x=0)/\ouat(y=2)) *}     y: f:=1
+fi
+-------------------------
+{ zz: !(0:r1=1/\y=2)  }

@@ -1,0 +1,16 @@
+{aa: x=y=0}
+----------------------
+guarantee [ _B(sofar(x!=2)) | x:=2; _B(ouat(x=2)) | y:=1 ]
+
+{* lo aa: _B(sofar(x!=2)) *}                    a: x:=2;
+{* bo a: _B(ouat(x=2)) *}                       b: y:=1
+
+-----------------------
+guarantee [ true | x:=1 ]
+
+{* lo aa: y=1=>ouat(x=2) *}                     c: r1:=y;
+{* lo c: r1=1=>ouat(x=2) *}                     d: x:=1 
+{* lo d: r1=1=>ouat(x=2)/\x=1 *}
+
+-----------------------
+{ zz: !(1:r1=1/\x=2) }

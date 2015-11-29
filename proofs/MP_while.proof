@@ -1,0 +1,20 @@
+# while loops are work in progress.
+
+{aa: f=0}
+----------------------
+guarantee [true | m:=1; _B(m=1) | f:=1]
+
+{* lo aa: true *}                           a: m:=1;
+{* bo a: _B(m=1) *}                         b: f:=1 
+------------------
+{* lo aa: f=1=>m=1 *}                       c: r1:=f;
+while 
+    {* lo c: r1=1\/f=1=>m=1 *} \->/ 
+    {* lo d: r1=1\/f=1=>m=1 *}          bb: r1!=1 
+do
+    {* lo bb(t): f=1=>m=1 *}                d: r1:=f
+od;
+{* lo bb(f): r1=m=1 *}                      e: r2:=m
+{* lo e: r1=r2=1 *}
+------------------
+{zz: 1:r1=1:r2=1}

@@ -1,0 +1,54 @@
+Arsenic is a proofchecker for New Lace (soon to be on Arxiv).
+
+To use Arsenic you need an OCaml installation, including ocamlbuild. You will need the 
+Unix command-line tools (make, cc, config, etc.) You also need Microsoft Z3. 
+
+For OCaml and ocamlbuild, do whatever the ocaml websites tell you to do.
+
+Then to set up the directory 
+
+    make clean
+    make links
+
+To download and build Z3, you will need git (on OS X I got it by brew install git; 
+brew upgrade git might be a good idea if yours is long in the tooth). Then use
+
+    make newz3
+
+(If that fails to clone z3 from github, see footnote 1.)
+
+To build Arsenic and Test, use
+
+    make Arsenic
+    make Test
+    
+There are lots of test proofs in the proofs directory. You can run through some tests by
+
+    make simpletest
+    make coherencetest
+    
+-- you should see lots of OKs and absolutely no lines starting with "**".
+
+It's also possible to build Check and ToLaTeX. Check allows you to make simple queries
+of Z3 which are like the proof obligations checked by Arsenic: see the .query files in 
+the proofs directory for some examples. ToLaTeX is probably only useful to me: it 
+translates proofs into LaTeX source which I can use, with some personal macros, as example 
+figures in papers about New Lace and Arsenic.
+
+Thanks to Josh Berdine for the OCaml interface to Z3, which is what make newz3 downloads
+and builds. Thanks, of course, to the INRIA guys for OCaml and the Microsoft guys for Z3.
+
+Richard Bornat
+R.Bornat at mdx dot ac dot uk
+richard at bornat dot me dot uk
+2015/11/25
+
+------------------------
+
+Footnote 1: Recently I couldn't clone z3 (OS X Yosemite) without an RPC network error. 
+There seems to have been a problem with git clone, which I fixed in the Makefile by using 
+git.codeplex rather than git01.codeplex. See 
+
+    http://codeplex.codeplex.com/workitem/26133
+    
+for possible illumination if it breaks again.

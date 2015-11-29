@@ -1,0 +1,8 @@
+# this should all succeed. A test of the embedding of stuff like _U since _U.
+_U(x=1)/\r1=y => (r1=0=>_U(x=1)/\y=0);
+(r1=0=>_U(x=1)/\y=0) => (r1=0=>_U(x=1)/\!_U(y=1));
+_U(x=1)/\!_U(y=1) => (_U(x=1) since !_U(y=1));
+(P=>Q) => (A=>P) => (A=>Q);
+x=1/\y=0 => (x=1 since y=0);
+(r1=0=>_U(x=1)/\!_U(y=1)) => (r1=0=>(_U(x=1) since !_U(y=1)));
+_U(x=1)/\r1=y => (r1=0=>(_U(x=1) since !_U(y=1)));

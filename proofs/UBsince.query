@@ -1,0 +1,4 @@
+# a test of speed ...
+_U(x=1)/\!_U(y=1) => (_U(x=1) since !_U(y=1));
+(r1=0=>_U(x=1)/\!_U(y=1)) => (r1=0=>(_U(x=1) since !_U(y=1)));
+_U(x=1)/\r1=y => (r1=0=>(_U(x=1) since !_U(y=1)));

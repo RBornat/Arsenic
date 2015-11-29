@@ -1,0 +1,13 @@
+{aa: x=1}
+---------------------
+guarantee [x=1 | x:=2]
+{* lo aa: sofar(x=1) *}             a: x:=2
+{* lo a: _c(x,1,2) *}
+---------------------
+# there appears to be no way round the problem that the observation of r2 must be
+# elaboration-after the observation of r1. I have to use explicit lo.
+                                    b: r1:=x;
+{* lo b: ouat(r1=x) *}              c: r2:=x
+{* lo c: r1!=r2=>_c(x,r1,r2) *}
+---------------------
+{ zz: !(1:r1=2/\ 1:r2=1) }

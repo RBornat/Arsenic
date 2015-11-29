@@ -1,0 +1,5 @@
+#sofar(y!=2)/\ouat(y=1)=>!ouat(y=1/\ouat(y=2));
+#x=1=>!ouat(y=1/\ouat(y=2)) _against _B(ouat(x=1)) | y:=2;
+#x=1=>!ouat(y=1/\ouat(y=2)) _against true | y:=2;
+#(x=1=>sofar(y!=1\/sofar(y!=2)))@=>(x=1=>!ouat(y=1/\ouat(y=2)))
+r1=2=>ouat(y=1)/\ouat(x=2)/\(x=1=>!ouat(y=1/\ouat(y=2))) _against _B(sofar(x!=2)) | y:=1;

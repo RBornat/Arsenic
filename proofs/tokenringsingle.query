@@ -1,0 +1,16 @@
+# is the result of the do-until stable? Must use C because _B is a reserved word ... hmm.
+_assert W=77;
+r1%W=0 => lh=r1/\tk=r1 _against [C].C%W!=0/\lh=C/\tk=C | tk:=C+1;
+_assert W=77;
+r1%W=0 => lh=r1/\tk=r1 _against [C].C%W!=0/\lh=C/\_B(C<tk/\tk<=(C/W+1)*W) | lh :=C+1;
+# is the pre-lwsync postcondition stable?
+_assert W=77;
+r1%W=0/\lh=r1/\tk=r1+1 _against [C].C%W!=0/\lh=C/\tk=C | tk:=C+1;
+_assert W=77;
+r1%W=0/\lh=r1/\tk=r1+1 _against [C].C%W!=0/\lh=C/\_B(C<tk/\tk<=(C/W+1)*W) | lh :=C+1;
+# are the original rely interferences stable against each other? They should not be (1 against 2)
+_assert W=77;
+[C].C%W!=0/\lh=C/\_B(C<tk/\tk=C+1) | lh :=C+1 _against [D].D%W!=0/\lh=D/\tk=D | tk:=D+1;
+# and with the correction?
+_assert W=77;
+[C].C%W!=0/\lh=C/\_B(C<tk/\tk<=(C/W+1)*W) | lh :=C+1 _against [D].D%W!=0/\lh=D/\tk=D | tk:=D+1;
