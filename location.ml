@@ -11,7 +11,7 @@ let locv = function
   | VarLoc v       -> v
   | ArrayLoc (v,_) -> v
 
-let string_of_loc = function
+let string_of_location = function
   | VarLoc v       -> Name.string_of_var v
   | ArrayLoc (v,e) -> Name.string_of_var v ^ "[" ^ string_of_formula e ^ "]"
 

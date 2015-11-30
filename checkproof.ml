@@ -880,7 +880,7 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
                  let query = _recImplies (assertion_of_knot External ct.tripletknot) rhs in
                  let stringfun () = 
                    Printf.sprintf "uniqueness of write to %s (precondition doesn't imply %s)"
-                                  (Location.string_of_loc loc)
+                                  (Location.string_of_location loc)
                                   (string_of_formula rhs)
                  in
                  check_taut ct.tripletpos stringfun query

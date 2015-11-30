@@ -23,19 +23,19 @@ let string_of_assign a =
   | RbecomesE (r,f)    -> soa (Name.string_of_reg r) (string_of_formula f)
   | LocbecomesEs locfs -> 
       (match locfs with
-       | [location,f] -> soa (string_of_loc location) (string_of_formula f)
-       | _     ->
+       | [loc,f] -> soa (string_of_location loc) (string_of_formula f)
+       | _       ->
          let locs, fs = List.split locfs in
          let string_of_rhs f =
            match f.fnode with
            | Tuple _ -> "(" ^ string_of_formula f ^ ")"
            | _       -> string_of_formula f
          in
-         soa (string_of_list string_of_loc "," locs) (string_of_list string_of_rhs "," fs)
+         soa (string_of_list string_of_location "," locs) (string_of_list string_of_rhs "," fs)
       )
   | RsbecomeLocs rslocs -> 
       (match rslocs with
-       | [rs,location] -> soa (string_of_list Name.string_of_reg "," rs) (string_of_loc location)
+       | [rs,loc] -> soa (string_of_list Name.string_of_reg "," rs) (string_of_location loc)
        | _        ->
          let rss, locs = List.split rslocs in
          let string_of_lhs rs =
@@ -43,7 +43,7 @@ let string_of_assign a =
            | [r] -> Name.string_of_reg r
            | _   -> "(" ^ string_of_list Name.string_of_reg "," rs ^ ")"
          in
-         soa (string_of_list string_of_lhs "," rss) (string_of_list string_of_loc "," locs)
+         soa (string_of_list string_of_lhs "," rss) (string_of_list string_of_location "," locs)
       )
 
 let is_aux_assign = function 

@@ -152,8 +152,8 @@
    *)
   let classify_assign ok_logc is_com binders (lefts,rights) =
     let string_of_lhs = function
-      | [a] -> string_of_loc a
-      | lhs -> "(" ^ string_of_list string_of_loc "," lhs ^ ")"
+      | [a] -> string_of_location a
+      | lhs -> "(" ^ string_of_list string_of_location "," lhs ^ ")"
     in
     let assign () = "assignment " ^ 
                     string_of_list string_of_lhs "," lefts ^
@@ -285,7 +285,7 @@
        (* Can't assign to pmsc names *)
        let pmscs, _ = List.partition ispmsc_lhs lefts in
        if not (Listutils.null pmscs) then
-         bad ("assignment to " ^ prefixed_phrase_of_list string_of_loc "fake variable" "fake variables" pmscs)
+         bad ("assignment to " ^ prefixed_phrase_of_list string_of_location "fake variable" "fake variables" pmscs)
        ;
        (* Sort out single assignments *)
        let rights = match lefts with
@@ -304,7 +304,7 @@
          let v = locv location in
          (* first can be real assignment; others must be auxiliary *)
          if not is_first && Name.is_realvar v then
-           bad ("non-auxiliary location " ^ string_of_loc location ^ " can only be assigned as \
+           bad ("non-auxiliary location " ^ string_of_location location ^ " can only be assigned as \
                  first component of multiple assignment");
          (* if the left is a real var and the right is a tuple, first tuple element must be real *)
          (match Name.is_realvar v, e.fnode with
