@@ -1,5 +1,5 @@
 (* This file is part of Arsenic, a proofchecker for New Lace logic.
-    Copyright (c) 2015 Richard Bornat.
+   Copyright (c) 2015 Richard Bornat.
    Licensed under the MIT license (sic): see LICENCE.txt or
    https://opensource.org/licenses/MIT
  *)
@@ -7,11 +7,11 @@
 type stitch 
 val string_of_stitch : stitch -> string
 
-val stitchadorn: Location.location -> Order.order -> Node.node 
+val stitchadorn: Sourcepos.sourcepos -> Order.order -> Node.node 
                  -> Formula.formula option -> Formula.formula 
                  -> stitch
 
-val loc_of_stitch       : stitch -> Location.location
+val pos_of_stitch       : stitch -> Sourcepos.sourcepos
 val order_of_stitch     : stitch -> Order.order
 val source_of_stitch    : stitch -> Node.node
 val spopt_of_stitch     : stitch -> Formula.formula option

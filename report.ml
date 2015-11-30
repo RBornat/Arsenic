@@ -1,7 +1,7 @@
-open Location
+open Sourcepos
 
 (* This file is part of Arsenic, a proofchecker for New Lace logic.
-    Copyright (c) 2015 Richard Bornat.
+   Copyright (c) 2015 Richard Bornat.
    Licensed under the MIT license (sic): see LICENCE.txt or
    https://opensource.org/licenses/MIT
  *)
@@ -20,10 +20,10 @@ let show_warnings = ref true (* unset by -suppresswarnings switch *)
 let ignore_undecided () = undecidedcount := !undecidedcount-1
 
 type report = 
-  | Error     of location * string
-  | Undecided of location * string
-  | Warning   of location * string
-  | Remark    of location * string
+  | Error     of sourcepos * string
+  | Undecided of sourcepos * string
+  | Warning   of sourcepos * string
+  | Remark    of sourcepos * string
 
 let reportbuffer = ref []
 let reportbuffer_buffer = ref []

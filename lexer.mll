@@ -1,5 +1,5 @@
 (* This file is part of Arsenic, a proofchecker for New Lace logic.
-    Copyright (c) 2015 Richard Bornat.
+   Copyright (c) 2015 Richard Bornat.
    Licensed under the MIT license (sic): see LICENCE.txt or
    https://opensource.org/licenses/MIT
  *)
@@ -7,7 +7,7 @@
 {
   open Parser
   
-  exception LexError of Location.location * string
+  exception LexError of Sourcepos.sourcepos * string
     
   let inc_linenum lexbuf =
   	let curr = lexbuf.Lexing.lex_curr_p in

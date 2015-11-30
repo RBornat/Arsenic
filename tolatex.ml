@@ -1,5 +1,5 @@
 open Program
-open Location
+open Sourcepos
 open Latex
 open Arg
 

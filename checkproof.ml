@@ -1,6 +1,6 @@
 open Function
 open Tuple
-open Location
+open Sourcepos
 open Listutils
 open Program
 open Thread
@@ -191,7 +191,7 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
      | CidThreadPost _  
      | CidFinal      _  -> 
          raise (Crash (Printf.sprintf "%s: stitch %s refers to thread/program postcondition"
-                                      (string_of_location (loc_of_stitch stitch))
+                                      (string_of_location (pos_of_stitch stitch))
                                       (string_of_stitch stitch)
                       )
                )
@@ -440,7 +440,7 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
             _recImplies (wrap_modal sourcepost) embroidery
           else
             (report 
-               (Remark (loc_of_stitch stitch, 
+               (Remark (pos_of_stitch stitch, 
                        Printf.sprintf "Arsenic cannot verify inheritance of embroidery \
                                        %s because the strongest-post of the source \
                                        %s contains hatted and/or hooked subformulas. \
@@ -497,10 +497,10 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
                        (string_of_node bnode) 
                        (string_of_node cnode)
       in
-      check_taut (loc_of_stitch stitch) stringfun query
+      check_taut (pos_of_stitch stitch) stringfun query
       ;
       (* external stability of stitch *)
-      List.iter (check_external_stability (loc_of_stitch stitch) bassert) rely;
+      List.iter (check_external_stability (pos_of_stitch stitch) bassert) rely;
       
       (* here goes with internal stability *)
       (* we have a constraint b->c. Find relevant so paths *)
@@ -533,7 +533,7 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
              | Some innerps -> 
                  if !verbose || !Settings.verbose_knots then
                    Printf.printf "\n%s: stitch %s pierces loop %s"
-                                 (string_of_location (loc_of_stitch stitch))
+                                 (string_of_location (pos_of_stitch stitch))
                                  (string_of_stitch stitch)
                                  (Option.string_of_option string_of_parentid (pidopt innerps));
                  let extra_paths = OPGraph.paths cnode cnode opgraph in
@@ -661,12 +661,12 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
                                                 (Intfdesc.assigned aintf)
                                  )
              then
-               avoided (loc_of_stitch stitch) "Z3 check" stringfun
+               avoided (pos_of_stitch stitch) "Z3 check" stringfun
              else
                (let scq = 
                   Stability.sc_stable_query_intfdesc bassert aintf 
                 in
-                check_taut (loc_of_stitch stitch) stringfun scq
+                check_taut (pos_of_stitch stitch) stringfun scq
                )
         )
       in
@@ -700,7 +700,7 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
                 in
                 let paths = OPSet.filter opath_ok paths in
                 if OPSet.is_empty paths then
-                  report (Error ((loc_of_stitch stitch),
+                  report (Error ((pos_of_stitch stitch),
                                  Printf.sprintf "stitch %s induces actual ordering %s->%s, and there is no \
                                                  corresponding actual (non-auxiliary) path"
                                                  (string_of_stitch stitch)

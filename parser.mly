@@ -7,7 +7,7 @@
 %{
   open Function
   open Tuple
-  open Location
+  open Sourcepos
   open Program
   open Query
   open Com
@@ -27,26 +27,26 @@
   
   exception ParserCrash of string
   
-  let get_location() =
+  let get_sourcepos() =
     Parsing.symbol_start_pos(), Parsing.symbol_end_pos()
 
-  let fadorn   f = Formula.fadorn (get_location()) f
+  let fadorn   f = Formula.fadorn (get_sourcepos()) f
   
-  let tripletadorn pre lab tof = Com.tripletadorn (get_location()) pre lab tof
+  let tripletadorn pre lab tof = Com.tripletadorn (get_sourcepos()) pre lab tof
   
-  let simplecomadorn ipre c = Com.simplecomadorn (get_location()) ipre c
+  let simplecomadorn ipre c = Com.simplecomadorn (get_sourcepos()) ipre c
   
-  let structsimplecomadorn c = Com.structsimplecomadorn (get_location()) c
+  let structsimplecomadorn c = Com.structsimplecomadorn (get_sourcepos()) c
   
-  let intfadorn   i = Intfdesc.intfadorn (get_location()) i
+  let intfadorn   i = Intfdesc.intfadorn (get_sourcepos()) i
   
-  let stitchadorn o n a = Stitch.stitchadorn (get_location()) o n a
+  let stitchadorn o n a = Stitch.stitchadorn (get_sourcepos()) o n a
   
-  let knotadorn k = Knot.knotadorn (get_location()) k  
+  let knotadorn k = Knot.knotadorn (get_sourcepos()) k  
   
-  let bad s = raise (Program.ParseError(get_location(),s))
+  let bad s = raise (Program.ParseError(get_sourcepos(),s))
   
-  let warn s = report (Warning (get_location(), s))
+  let warn s = report (Warning (get_sourcepos(), s))
   
   let pureness_allows ok_auxreg ok_logc =
     let logc_allowed = if ok_logc then ["logical constants"] else [] in
@@ -465,11 +465,11 @@
               try 
                 let assoc = List.combine params args in
                 if !Settings.expand_macros then 
-                  reloc (get_location()) (Formula.substitute assoc f)
+                  reloc (get_sourcepos()) (Formula.substitute assoc f)
                 else 
                   match argopt with 
                   | None      -> fadorn (Flogc name)
-                  | Some args -> reloc (get_location()) (fadorn (App (name,args)))
+                  | Some args -> reloc (get_sourcepos()) (fadorn (App (name,args)))
               with Invalid_argument _ -> 
                         bad (Printf.sprintf "macro %s expects %s"
                                   name
@@ -611,14 +611,14 @@ thread:
     threadhdrs seq t_postopt threadtrlrs 
                                         { let hdrs,guar = classify_thread_headers $1 in
                                           let relyopt = classify_thread_trailers $4 in
-                                          {t_loc=get_location(); 
+                                          {t_pos=get_sourcepos(); 
                                            t_guar=guar; t_body=Threadseq $2; t_postopt=$3; t_relyopt=relyopt;
                                            t_hdrs=hdrs; t_trlrs=$4
                                           } 
                                         }
   | threadhdrs LBRACE formula RBRACE       
                                         { let hdrs,guar = classify_thread_headers $1 in
-                                          {t_loc=get_location(); t_guar=guar; t_hdrs=hdrs; 
+                                          {t_pos=get_sourcepos(); t_guar=guar; t_hdrs=hdrs; 
                                            t_body=Threadfinal (check_assertion true $3); 
                                            t_postopt=None; t_relyopt=None; t_trlrs=[]
                                           }
@@ -707,7 +707,7 @@ node:
                                         }
                                         
 loclabel:
-  | label                               { {labloc=get_location(); lablab=$1} }
+  | label                               { {labloc=get_sourcepos(); lablab=$1} }
 
 label:
   | name                                { $1 }
@@ -966,7 +966,7 @@ name:
 
 /* name plus location */
 locname:
-  | name                                {get_location(),$1}
+  | name                                {get_sourcepos(),$1}
   
 locnamelist:
   | locname                             {[$1]}

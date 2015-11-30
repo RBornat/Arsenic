@@ -1,20 +1,20 @@
 open Function
 open Option
 open Tuple
-open Location
+open Sourcepos
 open Name
 open Listutils
 open MySet
 
 (* This file is part of Arsenic, a proofchecker for New Lace logic.
-    Copyright (c) 2015 Richard Bornat.
+   Copyright (c) 2015 Richard Bornat.
    Licensed under the MIT license (sic): see LICENCE.txt or
    https://opensource.org/licenses/MIT
  *)
  
 exception Error of string
 
-type formula = {floc: location; fnode: formulanode}
+type formula = {floc: sourcepos; fnode: formulanode}
 
 (* type-check for various restrictions -- formula, assertion, aux formula, etc. 
    Don't distinguish regs, auxs, vars in this type. Check on parsing? Yes.
@@ -125,7 +125,7 @@ let var_of_fvar = sndof2
 
 (* ********************* building formula records ********************** *)
 
-let fadorn location fnode = {floc=location; fnode=fnode}
+let fadorn sourcepos fnode = {floc=sourcepos; fnode=fnode}
 
 let _frec = fadorn dummyloc
 

@@ -1,4 +1,4 @@
-open Location
+open Sourcepos
 open Listutils
 open Order
 open Stitch
@@ -10,7 +10,7 @@ open Formula
    https://opensource.org/licenses/MIT
  *)
  
-type knot = { knotloc:location; knotnode:knotnode }
+type knot = { knotloc:sourcepos; knotnode:knotnode }
 
 and knotnode = 
   | SimpleKnot of stitch list 

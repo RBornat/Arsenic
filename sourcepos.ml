@@ -7,7 +7,7 @@ open Name
    https://opensource.org/licenses/MIT
  *)
  
-type location = Lexing.position * Lexing.position
+type sourcepos = Lexing.position * Lexing.position
 
 let dummyloc = (Lexing.dummy_pos, Lexing.dummy_pos)
 
@@ -66,7 +66,7 @@ let enclosingloc_of_locs xs =
 let enclosedby locinside locoutside =
   not (startsbefore locinside locoutside) && not (endsbefore locoutside locinside)
   
-type locatedlabel = {labloc: location; lablab: Name.label}
+type locatedlabel = {labloc: sourcepos; lablab: Name.label}
 
 let string_of_locatedlabel loclab = 
   bracketed_string_of_pair string_of_location string_of_label (loclab.labloc, loclab.lablab)

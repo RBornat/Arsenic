@@ -1,17 +1,22 @@
 open Function
-open Location
+open Sourcepos
 open Name
 open Formula
 open Order
 open Node
 
 (* This file is part of Arsenic, a proofchecker for New Lace logic.
-    Copyright (c) 2015 Richard Bornat.
+   Copyright (c) 2015 Richard Bornat.
    Licensed under the MIT license (sic): see LICENCE.txt or
    https://opensource.org/licenses/MIT
  *)
  
-type stitch = { stitchloc:location; stitchorder: order; stitchsource: node; stitchspopt: formula option; stitchembroidery: formula }
+type stitch = { stitchpos       :sourcepos; 
+                stitchorder     : order; 
+                stitchsource    : node; 
+                stitchspopt     : formula option; 
+                stitchembroidery: formula 
+              }
 
 let string_of_stitch { stitchorder=order; stitchsource=source; stitchspopt=spopt; stitchembroidery=assertion } =
   Printf.sprintf "%s %s%s: %s" 
@@ -24,9 +29,9 @@ let string_of_stitch { stitchorder=order; stitchsource=source; stitchspopt=spopt
                  (string_of_formula assertion)
 
 let stitchadorn loc order source spopt assertion = 
-  { stitchloc=loc; stitchorder=order; stitchsource=source; stitchspopt=spopt; stitchembroidery=assertion }
+  { stitchpos=loc; stitchorder=order; stitchsource=source; stitchspopt=spopt; stitchembroidery=assertion }
 
-let loc_of_stitch        s = s.stitchloc
+let pos_of_stitch        s = s.stitchpos
 let order_of_stitch      s = s.stitchorder
 let source_of_stitch     s = s.stitchsource
 let spopt_of_stitch      s = s.stitchspopt

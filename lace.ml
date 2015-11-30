@@ -2,7 +2,7 @@ open Function
 open Tuple
 open Listutils
 open Settings
-open Location
+open Sourcepos
 open Printer
 open Name
 open Formula
@@ -151,7 +151,7 @@ let check_labels_thread labmap thread =
           in
           (match source with
            | Cnode  _ ->
-               report (Error (loc_of_stitch stitch,
+               report (Error (pos_of_stitch stitch,
                               Printf.sprintf "constraint source %s is a control expression; \
                                               constraint should use %s"
                                 (string_of_node source)
@@ -160,7 +160,7 @@ let check_labels_thread labmap thread =
                       )
            | CEnode _ -> 
                if List.mem source gooduses then () else
-                 report (Error (loc_of_stitch stitch,
+                 report (Error (pos_of_stitch stitch,
                                 Printf.sprintf "constraint source %s %s; \
                                                 constraint should use %s"
                                   (string_of_node source)
@@ -172,7 +172,7 @@ let check_labels_thread labmap thread =
       | _ (* not ControlLoc *) ->
           (match source with
            | CEnode _ ->
-               report (Error (loc_of_stitch stitch,
+               report (Error (pos_of_stitch stitch,
                               Printf.sprintf "constraint source %s is not a control expression; \
                                               constraint should use %s"
                                 (string_of_node source)
@@ -184,7 +184,7 @@ let check_labels_thread labmap thread =
     with
     | Invalid_argument s as exn -> 
         if Stringutils.starts_with s "Not_found LabMap.get_parents" then
-          report (Error ((loc_of_stitch stitch), Printf.sprintf "label %s undefined" slab))
+          report (Error ((pos_of_stitch stitch), Printf.sprintf "label %s undefined" slab))
         else raise exn
     | exn                       -> raise exn
   in
@@ -414,7 +414,7 @@ let check_constraints_thread preopt postopt labmap opgraph thread =
     if OPSet.is_empty (so_opaths (OPGraph.paths source target opgraph)) then
       report 
         (Error 
-           ((loc_of_stitch stitch), 
+           ((pos_of_stitch stitch), 
             Printf.sprintf "%s %s->%s; %s->%s is not in so" 
                            (string_of_order (order_of_stitch stitch))
                            (string_of_node source)
@@ -429,7 +429,7 @@ let check_constraints_thread preopt postopt labmap opgraph thread =
         if not (is_CEnode source) then
           report 
             (Error 
-               (loc_of_stitch stitch, string_of_order Go ^ " constraint source must be \
+               (pos_of_stitch stitch, string_of_order Go ^ " constraint source must be \
                                       the control expression of a conditional or a loop"
                )
             );
@@ -439,7 +439,7 @@ let check_constraints_thread preopt postopt labmap opgraph thread =
          | _                         ->
              report 
                (Error (* is it? I think so *)
-                  (loc_of_stitch stitch, string_of_order Go ^ " constraint target must be \
+                  (pos_of_stitch stitch, string_of_order Go ^ " constraint target must be \
                                          a variable assignment"
                   )
                )

@@ -1,6 +1,6 @@
 open Function
 open Name
-open Location
+open Sourcepos
 open Listutils
 
 (* This file is part of Arsenic, a proofchecker for New Lace logic.

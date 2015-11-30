@@ -1,23 +1,23 @@
 open Listutils
-open Location
+open Sourcepos
 open Formula
 open Knot
 open Assign
 
 (* This file is part of Arsenic, a proofchecker for New Lace logic.
-    Copyright (c) 2015 Richard Bornat.
+   Copyright (c) 2015 Richard Bornat.
    Licensed under the MIT license (sic): see LICENCE.txt or
    https://opensource.org/licenses/MIT
  *)
  
-type simplecom = {param_SCloc: location; sc_ipreopt: formula option; sc_node: scomnode}
+type simplecom = {sc_pos: sourcepos; sc_ipreopt: formula option; sc_node: scomnode}
 
 and scomnode =
   | Skip
   | Assert of formula
   | Assign of assign
 
-and structcom = {structcomloc: location; structcomnode: structcomnode}
+and structcom = {structcomloc: sourcepos; structcomnode: structcomnode}
 
 and structcomnode = 
   | If of formula triplet * seq * seq
@@ -25,7 +25,7 @@ and structcomnode =
   | DoUntil of seq * formula triplet 
   
 and 'a triplet = 
-  { tripletloc: location;
+  { tripletloc: sourcepos;
     tripletknot: knot; 
     tripletlab: locatedlabel; 
     tripletof: 'a 
@@ -43,11 +43,11 @@ let is_simplecom = function
 
 let tripletadorn loc knot lab tof = {tripletloc=loc; tripletknot=knot; tripletlab=lab; tripletof=tof}
 
-let simplecomadorn loc ipre scomnode = {param_SCloc = loc; sc_ipreopt = ipre; sc_node=scomnode}
+let simplecomadorn loc ipre scomnode = {sc_pos = loc; sc_ipreopt = ipre; sc_node=scomnode}
 
 let structsimplecomadorn loc node = {structcomloc = loc; structcomnode=node}
 
-let _simplecomrec = simplecomadorn Location.dummyloc
+let _simplecomrec = simplecomadorn Sourcepos.dummyloc
 
 let loc_of_com = function
   | Com ct       -> ct.tripletloc

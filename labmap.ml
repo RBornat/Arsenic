@@ -1,5 +1,5 @@
 open Tuple
-open Location
+open Sourcepos
 open Option
 open Listutils
 open Name
@@ -14,9 +14,9 @@ open Knot
  *)
  
 type scloc = 
-  | DoUntilLoc of location   
-  | WhileLoc   of location   
-  | IfLoc      of location
+  | DoUntilLoc of sourcepos   
+  | WhileLoc   of sourcepos   
+  | IfLoc      of sourcepos
   | IfArmLoc   of bool
   | ControlLoc 
 
@@ -51,7 +51,7 @@ let string_of_parentid = Tuple.bracketed_string_of_pair string_of_int string_of_
 
 let string_of_parentids = bracketed_string_of_list string_of_parentid
 
-type labelid = location * componentid * parentid list
+type labelid = sourcepos * componentid * parentid list
 
 let string_of_labelid =
   Tuple.bracketed_string_of_triple 

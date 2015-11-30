@@ -2,7 +2,7 @@ open Tuple
 open Program
 open Printer
 open Settings
-open Location
+open Sourcepos
 open Report
 open Z3
 open Rely

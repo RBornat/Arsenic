@@ -2,7 +2,7 @@ open Tuple
 open Query
 open Printer
 open Settings
-open Location
+open Sourcepos
 open Report
 open Name
 open Formula

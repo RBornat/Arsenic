@@ -1,4 +1,4 @@
-open Location
+open Sourcepos
 open Function
 open Tuple
 open Option
@@ -8,13 +8,13 @@ open Assign
 open Listutils
 
 (* This file is part of Arsenic, a proofchecker for New Lace logic.
-    Copyright (c) 2015 Richard Bornat.
+   Copyright (c) 2015 Richard Bornat.
    Licensed under the MIT license (sic): see LICENCE.txt or
    https://opensource.org/licenses/MIT
  *)
  
 (* we now allow internal interference -- i.e. register assigns *)
-type intfdesc = {iloc: location; irec: intfrec}
+type intfdesc = {iloc: sourcepos; irec: intfrec}
 
 and intfrec = { i_binders  : NameSet.t; 
                 i_pre      : formula;
@@ -36,7 +36,7 @@ let string_of_intfdesc i = string_of_intfrec i.irec
 
 let string_of_intfdescs = string_of_list string_of_intfdesc "; "
 
-let intfadorn location irec = {iloc = location; irec=irec}
+let intfadorn sourcepos irec = {iloc = sourcepos; irec=irec}
 
 let mk_intfdesc loc pre assign =
   let freers = if is_var_assign assign then

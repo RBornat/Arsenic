@@ -1,5 +1,5 @@
 open Option
-open Location
+open Sourcepos
 open Intfdesc
 open Formula
 open Com
@@ -29,7 +29,7 @@ type header = (* also trailer, actually *)
   | GuarHdr   of intfdesc list
   | RelyHdr   of intfdesc list
   
-and thread = { t_loc     : location;
+and thread = { t_pos     : sourcepos;
                t_hdrs    : header list;                            (* for tolatex *)
                t_guar    : intfdesc list;                          (* guarantee *)
                t_body    : threadbody;                             (* body *)
@@ -58,7 +58,7 @@ let string_of_thread {t_guar=guarantee; t_body=body; t_postopt=postopt; t_relyop
   solast "\n" string_of_knot postopt ^
   solast "\n" (solast_list "\n" string_of_rely) relyopt
 
-let threadloc {t_loc=loc} = loc
+let threadloc {t_pos=loc} = loc
 
 let threadseq {t_body=body} =
   match body with

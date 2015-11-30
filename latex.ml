@@ -2,7 +2,7 @@ open Function
 open Tuple
 open Option
 open Listutils
-open Location
+open Sourcepos
 open Name
 open Formula
 open Node

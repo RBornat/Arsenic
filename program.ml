@@ -1,6 +1,6 @@
 open Listutils
 open Option
-open Location
+open Sourcepos
 open Formula
 open Name
 open Com
@@ -12,7 +12,7 @@ open Thread
    https://opensource.org/licenses/MIT
  *)
  
-exception ParseError of location * string (* because I can't put it in Parser, and I have to put it somewhere *)
+exception ParseError of sourcepos * string (* because I can't put it in Parser, and I have to put it somewhere *)
 
 type outerassert = locatedlabel * formula
 
