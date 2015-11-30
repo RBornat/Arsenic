@@ -31,17 +31,17 @@ let reports = ref []
 
 let report stuff = 
   if Listutils.null !reportbuffer_buffer then
-    (let kind, loc, s, ref, show = 
+    (let kind, spos, s, ref, show = 
        (match stuff with 
-        | Error     (loc,s) -> "**ERROR"    , loc, s, errorcount    , true
-        | Undecided (loc,s) -> "**OH BOTHER", loc, s, undecidedcount, true
-        | Warning   (loc,s) -> "**WARNING"  , loc, s, warningcount  , !show_warnings
-        | Remark    (loc,s) -> ""           , loc, s, remarkcount   , !show_warnings
+        | Error     (spos,s) -> "**ERROR"    , spos, s, errorcount    , true
+        | Undecided (spos,s) -> "**OH BOTHER", spos, s, undecidedcount, true
+        | Warning   (spos,s) -> "**WARNING"  , spos, s, warningcount  , !show_warnings
+        | Remark    (spos,s) -> ""           , spos, s, remarkcount   , !show_warnings
        )
      in
      let message = 
          "\n" ^ kind ^
-         (if loc=dummyloc then "" else (" " ^ string_of_location loc)) ^ 
+         (if spos=dummy_spos then "" else (" " ^ string_of_sourcepos spos)) ^ 
          ": " ^ s
      in
      if not (List.mem message !reports) then

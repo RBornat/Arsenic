@@ -14,7 +14,7 @@ open Listutils
  *)
  
 (* we now allow internal interference -- i.e. register assigns *)
-type intfdesc = {iloc: sourcepos; irec: intfrec}
+type intfdesc = {ipos: sourcepos; irec: intfrec}
 
 and intfrec = { i_binders  : NameSet.t; 
                 i_pre      : formula;
@@ -36,16 +36,16 @@ let string_of_intfdesc i = string_of_intfrec i.irec
 
 let string_of_intfdescs = string_of_list string_of_intfdesc "; "
 
-let intfadorn sourcepos irec = {iloc = sourcepos; irec=irec}
+let intfadorn sourcepos irec = {ipos = sourcepos; irec=irec}
 
-let mk_intfdesc loc pre assign =
+let mk_intfdesc spos pre assign =
   let freers = if is_var_assign assign then
                  let frees = NameSet.union (Formula.frees pre) (Assign.frees assign) in
                  NameSet.filter Name.is_anyreg frees 
                else
                  NameSet.empty
   in
-  {iloc=loc; irec={i_binders=freers; i_pre=pre; i_assign=assign}}
+  {ipos=spos; irec={i_binders=freers; i_pre=pre; i_assign=assign}}
   
 (* we don't change v here. If you want to change it, do it in f_intf.
    And for some reason we lose the label. Hmm.
@@ -69,8 +69,8 @@ let map f_intf f_formula = anyway (optmap f_intf f_formula)
 
 let rec optstriploc intfdesc =
   optmap 
-    (function  | {iloc=loc} when loc=dummyloc -> None
-               | intfdesc                     -> Some (striploc {intfdesc with iloc=dummyloc}))
+    (function  | {ipos=spos} when spos=dummy_spos -> None
+               | intfdesc                     -> Some (striploc {intfdesc with ipos=dummy_spos}))
     Formula.optstriploc 
     intfdesc
     
@@ -162,7 +162,7 @@ let loces intfdesc =
 
 let assigned_vars intfdesc = 
   let locs, _ = List.split (loces intfdesc) in
-  List.map Assign.locv locs
+  List.map Location.locv locs
 
 let actualvar = List.hd <.> assigned_vars 
 

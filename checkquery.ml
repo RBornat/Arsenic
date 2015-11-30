@@ -30,10 +30,10 @@ let parse_queries_from_channel in_channel =
        raise (Error ("**Parse error at line "^string_of_int (curr.Lexing.pos_lnum)^ 
                           " character "^string_of_int (curr.Lexing.pos_cnum-curr.Lexing.pos_bol)^
                           " (just before \""^Lexing.lexeme lexbuf^"\")")))
-  | Program.ParseError(loc,s) ->
-        raise (Error ("\n**SYNTAX ERROR at "^string_of_location loc ^ " " ^ s))
-  | Lexer.LexError(loc,s) -> 
-        raise (Error ("\n**LEXING ERROR at "^string_of_location loc ^ ": " ^ s))
+  | Program.ParseError(spos,s) ->
+        raise (Error ("\n**SYNTAX ERROR at "^string_of_sourcepos spos ^ " " ^ s))
+  | Lexer.LexError(spos,s) -> 
+        raise (Error ("\n**LEXING ERROR at "^string_of_sourcepos spos ^ ": " ^ s))
   
 let parse_queries_from_file filename =
   let in_channel = open_in filename in

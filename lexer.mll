@@ -171,14 +171,14 @@ rule make_token = parse
  *)
 	
 (* oh dear lor a recursive lexer ... *)
-and bracomment loc = parse
+and bracomment spos = parse
 	|	"(*"        { bracomment (get_loc lexbuf) lexbuf; 
-					  bracomment loc lexbuf
+					  bracomment spos lexbuf
 					}
   	| 	"*)"        { () }
-  	| 	'\n'        { inc_linenum lexbuf; bracomment loc lexbuf }
-  	|	eof			{ raise (LexError (loc, "unmatched comment-bracket '(*'")) }
-  	| 	_           { bracomment loc lexbuf }
+  	| 	'\n'        { inc_linenum lexbuf; bracomment spos lexbuf }
+  	|	eof			{ raise (LexError (spos, "unmatched comment-bracket '(*'")) }
+  	| 	_           { bracomment spos lexbuf }
       
 {
 

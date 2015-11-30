@@ -2,6 +2,7 @@ open Function
 open Sourcepos
 open Name
 open Formula
+open Location
 open Order
 open Node
 
@@ -11,11 +12,12 @@ open Node
    https://opensource.org/licenses/MIT
  *)
  
-type stitch = { stitchpos       :sourcepos; 
-                stitchorder     : order; 
-                stitchsource    : node; 
-                stitchspopt     : formula option; 
-                stitchembroidery: formula 
+type stitch = { stitchpos        : sourcepos; 
+                stitchorder      : order; 
+                stitchsource     : node; 
+                (* stitchlocopt     : (location * bool) option; *)
+                stitchspopt      : formula option; 
+                stitchembroidery : formula 
               }
 
 let string_of_stitch { stitchorder=order; stitchsource=source; stitchspopt=spopt; stitchembroidery=assertion } =
@@ -28,8 +30,8 @@ let string_of_stitch { stitchorder=order; stitchsource=source; stitchspopt=spopt
                  )
                  (string_of_formula assertion)
 
-let stitchadorn loc order source spopt assertion = 
-  { stitchpos=loc; stitchorder=order; stitchsource=source; stitchspopt=spopt; stitchembroidery=assertion }
+let stitchadorn spos order source spopt assertion = 
+  { stitchpos=spos; stitchorder=order; stitchsource=source; stitchspopt=spopt; stitchembroidery=assertion }
 
 let pos_of_stitch        s = s.stitchpos
 let order_of_stitch      s = s.stitchorder

@@ -16,6 +16,7 @@
   open Printer
   open Formula
   open Name
+  open Location
   open Assign
   open Intfdesc
   open Report
@@ -94,7 +95,7 @@
                               prefixed_phrase_of_list string_of_name "auxiliary register" "auxiliary registers"
                                  (NameSet.elements auxregs)])
       in
-        raise (Program.ParseError (formula.floc,
+        raise (Program.ParseError (formula.fpos,
                            "formula " ^ string_of_formula formula ^ 
                            " should be a pure combination of " ^ 
                            pureness_allows (not (NameSet.is_empty auxregs)) ok_logc ^
@@ -147,7 +148,7 @@
                 bad ("Parser crash: " ^ string_of_name n ^ " can't be classified as register, variable or logical constant")
 
   (* filtering assigns -- parsed as lhs list := formula list, where each lhs is a
-     list of Assign.loc. All lists are non-empty -- see loclist and formulas entries in parser
+     list of Assign.location. All lists are non-empty -- see loclist and formulas entries in parser
    *)
   let classify_assign ok_logc is_com binders (lefts,rights) =
     let string_of_lhs = function
@@ -160,7 +161,7 @@
                     string_of_list string_of_formula "," rights
     in
     let bad_interferenceform () = 
-      bad (assign() ^ " in interference description: only loc:=formula[,formula] is allowed")
+      bad (assign() ^ " in interference description: only location:=formula[,formula] is allowed")
     in
     let isreg_lhs lhs = 
       match lhs with 
@@ -225,13 +226,13 @@
            in
            let rights = List.map loc_rhs rights in
            let rslocs = List.combine (List.map (List.map locv) lefts) rights in
-           let check_single is_first (rs,loc) = 
+           let check_single is_first (rs,location) = 
              (* first lhs can have a realreg in first position *)
              if not is_first && Name.is_realreg (List.hd rs) then 
                bad ("only first left-hand element may name an actual (non-auxiliary) register");
              (* if realreg first, rhs must be real *)
              if Name.is_realreg (List.hd rs) then
-               (match loc with
+               (match location with
                 | VarLoc v -> 
                     if Name.is_auxvar v then
                       bad ("cannot assign value from auxiliary variable " ^ string_of_var v ^
@@ -252,7 +253,7 @@
        | []  , rights ->
            ((* it had better be a single-register assignment *)
             match lefts, rights with
-            | [[loc]], [e] -> RbecomesE (locv loc,e)
+            | [[location]], [e] -> RbecomesE (locv location,e)
             | _            ->
                 bad ("register:=formula assignment must have one register, one formula")
            )
@@ -299,11 +300,11 @@
              )
        ;
        let loces = List.combine lefts rights in
-       let check_single is_first (loc,e) =
-         let v = locv loc in
+       let check_single is_first (location,e) =
+         let v = locv location in
          (* first can be real assignment; others must be auxiliary *)
          if not is_first && Name.is_realvar v then
-           bad ("non-auxiliary location " ^ string_of_loc loc ^ " can only be assigned as \
+           bad ("non-auxiliary location " ^ string_of_loc location ^ " can only be assigned as \
                  first component of multiple assignment");
          (* if the left is a real var and the right is a tuple, first tuple element must be real *)
          (match Name.is_realvar v, e.fnode with
@@ -316,8 +317,8 @@
               ignore (check_anypure ok_logc binders e)
          )
          ;
-         (* if the left is a real loc then it must have a real ixf *)
-         (match loc with
+         (* if the left is a real location then it must have a real ixf *)
+         (match location with
           | VarLoc _         -> ()
           | ArrayLoc (v,ixf) -> if Name.is_realvar v then ignore (check_realpure true binders ixf)
          )
@@ -336,7 +337,7 @@
               (List.filter (not <.> Stringutils.is_empty)
                  [prefixed_phrase_of_list string_of_lhs "register" "registers" regs;
                   prefixed_phrase_of_list string_of_lhs "location" "locations" vars;
-                  prefixed_phrase_of_list string_of_lhs "non-reg/non-loc" "non-regs/non-locs" others
+                  prefixed_phrase_of_list string_of_lhs "non-reg/non-location" "non-regs/non-locs" others
                  ]
               )
            )
@@ -354,8 +355,8 @@
   let rec makebinder bindf locnames f = 
     match locnames with
     | [] -> f (* we can't actually parse an empty locname list, so this is just for recursion *)
-    | (loc,n)::locnames -> let f = makebinder bindf locnames f in
-                           Formula.fadorn (loc_of_locloc loc f.floc) (bindf n f)
+    | (location,n)::locnames -> let f = makebinder bindf locnames f in
+                           Formula.fadorn (spos_of_sposspos location f.fpos) (bindf n f)
                            
   let tcep_apply tc ep f =
     let wrong s =
@@ -707,7 +708,7 @@ node:
                                         }
                                         
 loclabel:
-  | label                               { {labloc=get_sourcepos(); lablab=$1} }
+  | label                               { {labspos=get_sourcepos(); lablab=$1} }
 
 label:
   | name                                { $1 }
@@ -794,16 +795,16 @@ lhss:
   | lhs COMMA lhss                      {$1::$3}
   
 lhs:
-  | loc                                 {[$1]}
+  | location                                 {[$1]}
   | LPAR loclist RPAR                   {$2}
 
-loc:
+location:
   | name                                {VarLoc $1}
   | name SQBRA formula SQKET            {ArrayLoc ($1,$3)}
 
 loclist:
-  | loc                                 {[$1]}
-  | loc COMMA loclist                   {$1::$3}
+  | location                                 {[$1]}
+  | location COMMA loclist                   {$1::$3}
   
 formulas:  
   | formula                             {[$1]}
@@ -907,7 +908,7 @@ comparison:
                                            *)
                                           let r =
                                           $1,
-                                          fadorn (_And (Formula.fadorn (loc_of_locloc $1.floc c.floc) (Compare($1,$2,c)))
+                                          fadorn (_And (Formula.fadorn (spos_of_sposspos $1.fpos c.fpos) (Compare($1,$2,c)))
                                                        right
                                                  )
                                           in

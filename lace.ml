@@ -50,19 +50,19 @@ let show_result name string_of stuff =
    check for uniqueness of labels.
  *)
 
-let addnewlabel loclab cid parents (map : labelid LabMap.t) =
+let addnewlabel poslab cid parents (map : labelid LabMap.t) =
   try 
-    let oldloc,_,_ = LabelMap.find loclab.lablab map in
+    let oldloc,_,_ = LabelMap.find poslab.lablab map in
     report 
       (Error 
-         (loclab.labloc, 
+         (poslab.labspos, 
           Printf.sprintf "label %s already defined at %s"
-                         (string_of_label loclab.lablab)
-                         (string_of_location oldloc)
+                         (string_of_label poslab.lablab)
+                         (string_of_sourcepos oldloc)
          )
       );
     map
-  with Not_found -> LabMap.add loclab.lablab (loclab.labloc,cid,parents) map
+  with Not_found -> LabMap.add poslab.lablab (poslab.labspos,cid,parents) map
 
 let pushparent p parents = (List.length parents+1,p)::parents
 ;;
@@ -72,15 +72,15 @@ let rec labmaps_com parents map = function
   | Structcom sc ->
       (match sc.structcomnode with
        | DoUntil (seq,ft) ->
-           let parents = pushparent (DoUntilLoc sc.structcomloc) parents in
+           let parents = pushparent (DoUntilLoc sc.structcompos) parents in
            let map = labmaps_seq parents map seq in
            addnewlabel ft.tripletlab (CidControl ft) (pushparent ControlLoc parents) map
        | While (ft,seq) -> 
-           let parents = pushparent (WhileLoc sc.structcomloc) parents in
+           let parents = pushparent (WhileLoc sc.structcompos) parents in
            let map = addnewlabel ft.tripletlab (CidControl ft) (pushparent ControlLoc parents) map in
            labmaps_seq parents map seq
        | If (ft,sthen,selse) ->
-           let parents = pushparent (IfLoc sc.structcomloc) parents in
+           let parents = pushparent (IfLoc sc.structcompos) parents in
            let map = addnewlabel ft.tripletlab (CidControl ft) (pushparent ControlLoc parents) map in
            let map = labmaps_seq (pushparent (IfArmLoc true) parents) map sthen in
            labmaps_seq (pushparent (IfArmLoc false) parents) map selse
@@ -92,11 +92,11 @@ and labmaps_seq parents map =
 let labmaps_thread preopt postopt t = 
   let map = LabMap.empty in
   let map = match preopt with 
-            | Some (loclab, f) -> addnewlabel loclab (CidInit (loclab.lablab,f)) [] map
+            | Some (poslab, f) -> addnewlabel poslab (CidInit (poslab.lablab,f)) [] map
             | None             -> map
   in
   let map = match postopt with 
-            | Some (loclab, f) -> addnewlabel loclab (CidFinal (loclab.lablab,f)) [] map
+            | Some (poslab, f) -> addnewlabel poslab (CidFinal (poslab.lablab,f)) [] map
             | None             -> map
   in
   match t.t_body with
@@ -105,7 +105,7 @@ let labmaps_thread preopt postopt t =
       let map = labmaps_seq [] map seq in
       match t.t_postopt with
       | None      -> map
-      | Some knot -> addnewlabel {labloc=knot.knotloc; lablab=""}
+      | Some knot -> addnewlabel {labspos=knot.knotloc; lablab=""}
                                  (CidThreadPost knot)
                                  []
                                  map
@@ -408,9 +408,9 @@ let check_constraints_thread preopt postopt labmap opgraph thread =
   let initnode = Cnode initlab in
   let so_opaths = OPSet.filter is_so_opath in
   
-  let check_constraints_stitch loclab stitch =
+  let check_constraints_stitch poslab stitch =
     let source = source_of_stitch stitch in
-    let target = Cnode loclab.lablab in
+    let target = Cnode poslab.lablab in
     if OPSet.is_empty (so_opaths (OPGraph.paths source target opgraph)) then
       report 
         (Error 
@@ -433,7 +433,7 @@ let check_constraints_thread preopt postopt labmap opgraph thread =
                                       the control expression of a conditional or a loop"
                )
             );
-        (match get_cid loclab.lablab labmap with
+        (match get_cid poslab.lablab labmap with
          | CidSimplecom ct 
            when Com.is_var_assign ct -> ()
          | _                         ->
@@ -446,15 +446,15 @@ let check_constraints_thread preopt postopt labmap opgraph thread =
         ) 
     | _  -> ()
   in
-  let rec check_constraints_knot loclab pc =
+  let rec check_constraints_knot poslab pc =
     match pc.knotnode with
     | SimpleKnot stitches  -> 
         (* check all are in so *)
-        List.iter (check_constraints_stitch loclab) stitches
+        List.iter (check_constraints_stitch poslab) stitches
     | KnotOr    (pc1,pc2) 
     | KnotAnd   (pc1,pc2) 
-    | KnotAlt   (pc1,pc2) -> check_constraints_knot loclab pc1;
-                             check_constraints_knot loclab pc2
+    | KnotAlt   (pc1,pc2) -> check_constraints_knot poslab pc1;
+                             check_constraints_knot poslab pc2
   in
   let knot_coverage origin all_paths_to knot =
     let rec fka knot =
@@ -472,10 +472,10 @@ let check_constraints_thread preopt postopt labmap opgraph thread =
   in
   fka knot
 in
-  let check_constraints_triplet knotmap {tripletloc=loc; tripletknot=knot; tripletlab=loclab} =
-    check_constraints_knot loclab knot;
+  let check_constraints_triplet knotmap {tripletknot=knot; tripletlab=poslab} =
+    check_constraints_knot poslab knot;
     let source = initnode in
-    let target = Cnode loclab.lablab in
+    let target = Cnode poslab.lablab in
     let all_paths_to = so_opaths (OPGraph.paths source target opgraph) in
     (* usually, a knot must cover all paths to the target *)
     let check_full_coverage knot =
@@ -485,7 +485,7 @@ in
         report (Error (knot.knotloc, Printf.sprintf "knot %s doesn't work in all possible executions. \
                                             These paths to %s don't contain all the constraint sources: %s"
                                             (string_of_knot knot)
-                                            (string_of_label loclab.lablab)
+                                            (string_of_label poslab.lablab)
                                             (Listutils.string_of_list (string_of_path <.> completepath_of_opath source target) "; " 
                                                (OPSet.elements (OPSet.diff all_paths_to coverage))
                                             )
@@ -527,8 +527,8 @@ in
         report (Error (knot.knotloc, Printf.sprintf "knot %s doesn't work in all possible executions of its loop. \
                                             These loop paths %s->%s don't contain all the constraint sources: %s"
                                             (string_of_knot knot)
-                                            (string_of_label loclab.lablab)
-                                            (string_of_label loclab.lablab)
+                                            (string_of_label poslab.lablab)
+                                            (string_of_label poslab.lablab)
                                             (Listutils.string_of_list (string_of_path <.> completepath_of_opath target target) "; " 
                                                (OPSet.elements discrepancy)
                                             )
@@ -542,7 +542,7 @@ in
         (let cas_stitch stitch = (* common ancestors of a stitch *)
            let source = source_of_stitch stitch in
            let slab = label_of_node source in
-           common_ancestors (get_parents slab labmap) (get_parents loclab.lablab labmap)
+           common_ancestors (get_parents slab labmap) (get_parents poslab.lablab labmap)
          in
          let rec cas_knot knot = (* common ancestors of a knot *)
            match knot.knotnode with 
@@ -633,7 +633,7 @@ let check_coincidence_formula binders =
       | Some ubf -> 
           report 
             (Error 
-               (f.floc,
+               (f.fpos,
                 Printf.sprintf "formula %s contains temporal coincidence %s"
                                (string_of_formula ubf)
                                (string_of_formula f)
@@ -677,7 +677,7 @@ let check_coincidence_prog {p_preopt=preopt; p_givopt=givopt; p_ts=threads; p_po
   in
   let ccoa oaopt =
     match oaopt with
-    | Some (loclab,f) -> cca (Some f)
+    | Some (poslab,f) -> cca (Some f)
     | _               -> ()
   in
   ccoa preopt;

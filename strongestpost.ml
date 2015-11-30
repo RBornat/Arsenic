@@ -4,6 +4,7 @@ open Option
 open Listutils
 open Name
 open Formula
+open Location
 open Assign
 
 (* This file is part of Arsenic, a proofchecker for New Lace logic.

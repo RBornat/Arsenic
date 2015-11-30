@@ -20,7 +20,7 @@ and knotnode =
   
 let alt_token = "\\->/"
 
-let knotadorn loc knotnode = { knotloc=loc; knotnode=knotnode }
+let knotadorn spos knotnode = { knotloc=spos; knotnode=knotnode }
 
 let rec assertion_of_knot ikind knot =
   match knot.knotnode with

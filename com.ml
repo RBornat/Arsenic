@@ -17,7 +17,7 @@ and scomnode =
   | Assert of formula
   | Assign of assign
 
-and structcom = {structcomloc: sourcepos; structcomnode: structcomnode}
+and structcom = {structcompos: sourcepos; structcomnode: structcomnode}
 
 and structcomnode = 
   | If of formula triplet * seq * seq
@@ -25,9 +25,9 @@ and structcomnode =
   | DoUntil of seq * formula triplet 
   
 and 'a triplet = 
-  { tripletloc: sourcepos;
+  { tripletpos: sourcepos;
     tripletknot: knot; 
-    tripletlab: locatedlabel; 
+    tripletlab: positionedlabel; 
     tripletof: 'a 
   }
 
@@ -41,17 +41,17 @@ let is_simplecom = function
   | Com _ -> true
   | _     -> false
 
-let tripletadorn loc knot lab tof = {tripletloc=loc; tripletknot=knot; tripletlab=lab; tripletof=tof}
+let tripletadorn spos knot lab tof = {tripletpos=spos; tripletknot=knot; tripletlab=lab; tripletof=tof}
 
-let simplecomadorn loc ipre scomnode = {sc_pos = loc; sc_ipreopt = ipre; sc_node=scomnode}
+let simplecomadorn spos ipre scomnode = {sc_pos = spos; sc_ipreopt = ipre; sc_node=scomnode}
 
-let structsimplecomadorn loc node = {structcomloc = loc; structcomnode=node}
+let structsimplecomadorn spos node = {structcompos = spos; structcomnode=node}
 
-let _simplecomrec = simplecomadorn Sourcepos.dummyloc
+let _simplecomrec = simplecomadorn Sourcepos.dummy_spos
 
 let loc_of_com = function
-  | Com ct       -> ct.tripletloc
-  | Structcom sc -> sc.structcomloc
+  | Com ct       -> ct.tripletpos
+  | Structcom sc -> sc.structcompos
   
 let lab_of_triplet {tripletlab=lab} = lab.lablab
 let knot_of_triplet {tripletknot=knot} = knot

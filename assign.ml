@@ -3,6 +3,7 @@ open Tuple
 open Option
 open Name
 open Formula
+open Location
 open Listutils
 
 (* This file is part of Arsenic, a proofchecker for New Lace logic.
@@ -11,26 +12,10 @@ open Listutils
    https://opensource.org/licenses/MIT
  *)
  
-type loc = VarLoc of var | ArrayLoc of var * formula
-
-let _recFloc = function
-  | VarLoc v         -> _recFname v (* due to cheating it might be a register ... *)
-  | ArrayLoc (v,ixf) -> _recArraySel (_recFname v) ixf
-
-let locv = function
-  | VarLoc v       -> v
-  | ArrayLoc (v,_) -> v
-
-let string_of_loc = function
-  | VarLoc v       -> Name.string_of_var v
-  | ArrayLoc (v,e) -> Name.string_of_var v ^ "[" ^ string_of_formula e ^ "]"
-
-let _ArrayLoc v e = ArrayLoc (v,e)
-
 type assign = 
   | RbecomesE  of reg * formula            (* real := pure or aux := auxpure *)
-  | LocbecomesEs of (loc * formula) list   (* first real/real or aux/auxpure, rest aux/auxpure *)
-  | RsbecomeLocs of (reg list * loc) list  (* first real/real or aux/auxpure, rest aux/aux *) 
+  | LocbecomesEs of (location * formula) list   (* first real/real or aux/auxpure, rest aux/auxpure *)
+  | RsbecomeLocs of (reg list * location) list  (* first real/real or aux/auxpure, rest aux/aux *) 
 
 let string_of_assign a =
   let soa lhs rhs = lhs ^ " := " ^ rhs in
@@ -38,7 +23,7 @@ let string_of_assign a =
   | RbecomesE (r,f)    -> soa (Name.string_of_reg r) (string_of_formula f)
   | LocbecomesEs locfs -> 
       (match locfs with
-       | [loc,f] -> soa (string_of_loc loc) (string_of_formula f)
+       | [location,f] -> soa (string_of_loc location) (string_of_formula f)
        | _     ->
          let locs, fs = List.split locfs in
          let string_of_rhs f =
@@ -50,7 +35,7 @@ let string_of_assign a =
       )
   | RsbecomeLocs rslocs -> 
       (match rslocs with
-       | [rs,loc] -> soa (string_of_list Name.string_of_reg "," rs) (string_of_loc loc)
+       | [rs,location] -> soa (string_of_list Name.string_of_reg "," rs) (string_of_loc location)
        | _        ->
          let rss, locs = List.split rslocs in
          let string_of_lhs rs =
@@ -90,11 +75,11 @@ let frees assign =
   match assign with
   | RbecomesE  (r,e)     -> NameSet.add r (Formula.frees e) 
   | LocbecomesEs loces   -> 
-      List.fold_left (fun set (loc,e) -> NameSet.union set (NameSet.union (loc_frees loc) (Formula.frees e)))
+      List.fold_left (fun set (location,e) -> NameSet.union set (NameSet.union (loc_frees location) (Formula.frees e)))
                      NameSet.empty
                      loces
   | RsbecomeLocs rsvs  -> 
-      List.fold_left (fun set (rs,loc) -> NameSet.union set (NameSet.union (loc_frees loc) (NameSet.of_list rs)))
+      List.fold_left (fun set (rs,location) -> NameSet.union set (NameSet.union (loc_frees location) (NameSet.of_list rs)))
                      NameSet.empty
                      rsvs
                      

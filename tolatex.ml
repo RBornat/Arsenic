@@ -26,13 +26,13 @@ let parse opts usage filename =
                      " character "^string_of_int (curr.Lexing.pos_cnum-curr.Lexing.pos_bol)^
                      " (just before \""^Lexing.lexeme lexbuf^"\")"))
                     )
-  | Program.ParseError(loc,s) ->
+  | Program.ParseError(spos,s) ->
         (close_in in_channel;
-         raise (Error ("\n**SYNTAX ERROR at "^string_of_location loc ^ ": " ^ s))
+         raise (Error ("\n**SYNTAX ERROR at "^string_of_sourcepos spos ^ ": " ^ s))
         )
-  | Lexer.LexError(loc,s) -> 
+  | Lexer.LexError(spos,s) -> 
         (close_in in_channel;
-         raise (Error ("\n**LEXING ERROR at "^string_of_location loc ^ ": " ^ s))
+         raise (Error ("\n**LEXING ERROR at "^string_of_sourcepos spos ^ ": " ^ s))
         )
   | exn -> (close_in in_channel; raise exn)
 

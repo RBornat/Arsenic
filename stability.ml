@@ -6,6 +6,7 @@ open Name
 open Formula
 open Intfdesc
 open Strongestpost
+open Location
 open Assign
 
 (* This file is part of Arsenic, a proofchecker for New Lace logic.

@@ -18,6 +18,7 @@ open Report
 open AskZ3
 open Stability
 open Intfdesc
+open Location
 
 (* This file is part of Arsenic, a proofchecker for New Lace logic.
     Copyright (c) 2015 Richard Bornat.
@@ -30,7 +31,7 @@ exception ModalQFail (* internal, see below *)
 
 let proofobs = ref 0
 
-let notyet loc s = Printf.printf "\n\n** %s: not yet checking %s" (string_of_location loc) s
+let notyet spos s = Printf.printf "\n\n** %s: not yet checking %s" (string_of_sourcepos spos) s
 
 (* a type for reporting lo-parallel interference *)
 type loparkind =
@@ -43,13 +44,13 @@ let string_of_loparkind = function
   | BeforeLo -> "before"
   | AfterLo  -> "after"
 
-let report_z3result r loc stringfun =
+let report_z3result r spos stringfun =
   match r with
   | Valid _        -> ()
-  | Invalid _      -> report (Error (loc, ("we do not have " ^ stringfun())))
-  | Undecided _    -> report (Undecided (loc, ("Z3 cannot decide " ^ stringfun())))
+  | Invalid _      -> report (Error (spos, ("we do not have " ^ stringfun())))
+  | Undecided _    -> report (Undecided (spos, ("Z3 cannot decide " ^ stringfun())))
   | BadQuery (f,s) -> raise (Crash (Printf.sprintf "\n\n** BADQUERY ** %s: %s\n\ngenerates\n\n%s\n\n"
-                                                   (string_of_location loc)
+                                                   (string_of_sourcepos spos)
                                                    (string_of_formula f)
                                                    s
                                    )
@@ -82,7 +83,7 @@ let mkintf ik ct =
     | _      -> assertion_of_knot ik ct.tripletknot 
   in
   let assign = assign_of_triplet ct in
-  Intfdesc.mk_intfdesc ct.tripletloc pre assign  
+  Intfdesc.mk_intfdesc ct.tripletpos pre assign  
 
 (* postconditions of each ctriplet *)
 module CPostMap =  MyMap.Make (struct type t = ikind * simplecom triplet
@@ -191,7 +192,7 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
      | CidThreadPost _  
      | CidFinal      _  -> 
          raise (Crash (Printf.sprintf "%s: stitch %s refers to thread/program postcondition"
-                                      (string_of_location (pos_of_stitch stitch))
+                                      (string_of_sourcepos (pos_of_stitch stitch))
                                       (string_of_stitch stitch)
                       )
                )
@@ -238,7 +239,7 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
     if i<0 then "rely" else ("thread " ^ string_of_int i)
   in
   
-  let check_external_stability loc assertion (_,intfdesc as intf) =
+  let check_external_stability spos assertion (_,intfdesc as intf) =
     let stringfun stabkind () = 
       Printf.sprintf "%s of %s against %s (from %s)" 
                      stabkind
@@ -249,7 +250,7 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
     let assigned = Intfdesc.assigned intfdesc in
     let frees = Formula.frees assertion in
     if NameSet.is_empty (NameSet.inter assigned frees) then
-      avoided loc "" (stringfun "external stability check")
+      avoided spos "" (stringfun "external stability check")
     else
       (let satq, extq = Stability.ext_stable_queries_intfdesc assertion intfdesc in 
        (* pragmatically, satisfaction involving coherence seems to be difficult for Z3. 
@@ -257,57 +258,57 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
         *)
        let ask_uo () =
          if not (Formula.exists is_recU assertion) then
-           (avoided loc "Z3 check" (stringfun "UO-EXT stability");
+           (avoided spos "Z3 check" (stringfun "UO-EXT stability");
             Valid ([],_recTrue)
            )
          else
            (let _, uoq = Stability.uo_stable_queries_intfdesc assertion intfdesc in
-            ask_taut loc (stringfun "UO-EXT stability") uoq;
+            ask_taut spos (stringfun "UO-EXT stability") uoq;
            )
        in
        let check_uo () =
          let r = ask_uo () in
-         report_z3result r loc (stringfun "UO-EXT stability")
+         report_z3result r spos (stringfun "UO-EXT stability")
        in
        if Formula.exists is_recCohere satq then
-         (match ask_taut loc (stringfun "EXT stability") extq with
+         (match ask_taut spos (stringfun "EXT stability") extq with
           | Valid _     -> 
               (match ask_uo () with
                | Valid _   -> ()
                | uo_result ->
-                   (match ask_sat loc (stringfun "SCLOC-EXT sat") satq with
+                   (match ask_sat spos (stringfun "SCLOC-EXT sat") satq with
                     | Invalid _  -> () (* we didn't need to ask *)
-                    | sat_result -> report_z3result sat_result loc (stringfun "SCLOC-EXT sat");
-                                    report_z3result uo_result loc (stringfun "UO-EXT stability")
+                    | sat_result -> report_z3result sat_result spos (stringfun "SCLOC-EXT sat");
+                                    report_z3result uo_result spos (stringfun "UO-EXT stability")
                    )
               )
           | taut_result ->
-              (match ask_sat loc (stringfun "SCLOC-EXT sat") satq with
+              (match ask_sat spos (stringfun "SCLOC-EXT sat") satq with
                | Invalid _  -> () (* we didn't need to ask *)
-               | Valid _    -> report_z3result taut_result loc (stringfun "EXT stability");
+               | Valid _    -> report_z3result taut_result spos (stringfun "EXT stability");
                                check_uo ();
-               | sat_result -> report_z3result sat_result loc (stringfun "SCLOC-EXT sat");
-                               report_z3result taut_result loc (stringfun "EXT stability");
+               | sat_result -> report_z3result sat_result spos (stringfun "SCLOC-EXT sat");
+                               report_z3result taut_result spos (stringfun "EXT stability");
                                check_uo ()
               )
          )
        else (* the straight way *)
          ((* try not to report undecided satq *)
-          match ask_sat loc (stringfun "SCLOC-EXT sat") satq with
+          match ask_sat spos (stringfun "SCLOC-EXT sat") satq with
           | Invalid _  -> ()
           | sat_result -> 
-             let taut_result = ask_taut loc (stringfun "EXT stability") extq in
+             let taut_result = ask_taut spos (stringfun "EXT stability") extq in
              match sat_result, taut_result with
              | _      , Valid _   -> 
                  (match ask_uo () with
                   | Valid _   -> ()
-                  | uo_result -> report_z3result sat_result loc (stringfun "SCLOC-EXT sat");
-                                 report_z3result uo_result loc (stringfun "UO-EXT stability")
+                  | uo_result -> report_z3result sat_result spos (stringfun "SCLOC-EXT sat");
+                                 report_z3result uo_result spos (stringfun "UO-EXT stability")
                  )
-             | Valid _, _         -> report_z3result taut_result loc (stringfun "EXT stability");
+             | Valid _, _         -> report_z3result taut_result spos (stringfun "EXT stability");
                                      check_uo ()
-             | _                  -> report_z3result sat_result loc (stringfun "SCLOC-EXT sat");
-                                     report_z3result taut_result loc (stringfun "EXT stability");
+             | _                  -> report_z3result sat_result spos (stringfun "SCLOC-EXT sat");
+                                     report_z3result taut_result spos (stringfun "EXT stability");
                                      check_uo ()
 
          )
@@ -323,8 +324,8 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
     let newforold v = Name.var_of_string (string_of_var v ^ "&new") in
     let tranloce (loc,e) =
       match loc with
-      | Assign.VarLoc v         -> _recEqual (_recFname (newforold v)) e
-      | Assign.ArrayLoc (v,ixf) -> _recEqual (_recFname (newforold v))
+      | VarLoc v         -> _recEqual (_recFname (newforold v)) e
+      | ArrayLoc (v,ixf) -> _recEqual (_recFname (newforold v))
                                              (_recArrayStore (_recFname v) ixf e)
     in
     let tranloces = conjoin <.> List.map tranloce in
@@ -337,7 +338,7 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
       let pre = Intfdesc.pre intfdesc in
       let loces = Intfdesc.loces intfdesc in
       let locs,_ = List.split loces in
-      let extravs = NameSet.diff freevs (NameSet.of_list (List.map Assign.locv locs)) in
+      let extravs = NameSet.diff freevs (NameSet.of_list (List.map Location.locv locs)) in
       conjoin [pre; tranloces loces; tranextravs extravs]
     in
     let tranrg intfdesc =
@@ -352,7 +353,7 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
                                       kindstring
                                    (* (Listutils.bracketed_string_of_list string_of_intfdesc rgs) *)
     in
-    check_taut intfdesc.iloc stringfun query
+    check_taut intfdesc.ipos stringfun query
   in
   
   (* a constraint b->c is interfered with by an assign a if there is an so-tree path
@@ -392,7 +393,7 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
     let cnode = Cnode clab in
     if !verbose || !Settings.verbose_knots then 
       Printf.printf "\n%s: checking knot %s inneropt %s"
-                (string_of_location knot.knotloc)
+                (string_of_sourcepos knot.knotloc)
                 (string_of_knot knot)
                 (Option.string_of_option OPSet.to_string inneropt);
     let cstitch inneropt () stitch =
@@ -472,7 +473,7 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
                              (string_of_formula spost)
                              (string_of_formula sourcepost)
             in
-            check_taut spost.floc stringfun query;
+            check_taut spost.fpos stringfun query;
             spost
       in
       let query = 
@@ -533,7 +534,7 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
              | Some innerps -> 
                  if !verbose || !Settings.verbose_knots then
                    Printf.printf "\n%s: stitch %s pierces loop %s"
-                                 (string_of_location (pos_of_stitch stitch))
+                                 (string_of_sourcepos (pos_of_stitch stitch))
                                  (string_of_stitch stitch)
                                  (Option.string_of_option string_of_parentid (pidopt innerps));
                  let extra_paths = OPGraph.paths cnode cnode opgraph in
@@ -797,7 +798,7 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
   in
   match thread.t_body with
   | Threadfinal f ->  
-      List.iter (check_external_stability f.floc f) rely
+      List.iter (check_external_stability f.fpos f) rely
   | Threadseq []  -> ()
   | Threadseq seq -> 
       (* If we have a given rely, we check it for bo stability. This is somewhat too 
@@ -816,10 +817,10 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
                                            (Formula.frees xid.irec.i_pre)
                             )
         then
-          avoided xid.iloc "Z3 check" stringfun
+          avoided xid.ipos "Z3 check" stringfun
         else
           (let boq = bo_stable_query_irecs xid.irec yid.irec in
-           check_taut xid.iloc stringfun boq
+           check_taut xid.ipos stringfun boq
           )
       in
       let pairable (i1,intf1) (i2,intf2) =
@@ -858,7 +859,7 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
                               (string_of_formula f)
                               (string_of_formula apre)
             in
-            check_taut ct.tripletloc stringfun query
+            check_taut ct.tripletpos stringfun query
             
         | Assign a
           when Assign.is_var_assign a ->
@@ -866,23 +867,23 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
             let loces = Assign.loces_of_assign a in
             (*
                if not !Settings.param_SCloc && List.length loces>1 then
-                 report (Error (ct.tripletloc,
+                 report (Error (ct.tripletpos,
                                 "simultaneous assignment not allowed with -SCloc false"
                                )
                         );
              *)
             let unique_ve (loc,e) =
-              if NameSet.mem (Assign.locv loc) !Coherence.coherence_variables then
+              if NameSet.mem (Location.locv loc) !Coherence.coherence_variables then
                 (let rhs = 
-                   _recSofar Here Now (_recNotEqual (Assign._recFloc loc) e) (* fun if it's an array ... *)
+                   _recSofar Here Now (_recNotEqual (Location._recFloc loc) e) (* fun if it's an array ... *)
                  in
                  let query = _recImplies (assertion_of_knot External ct.tripletknot) rhs in
                  let stringfun () = 
                    Printf.sprintf "uniqueness of write to %s (precondition doesn't imply %s)"
-                                  (Assign.string_of_loc loc)
+                                  (Location.string_of_loc loc)
                                   (string_of_formula rhs)
                  in
-                 check_taut ct.tripletloc stringfun query
+                 check_taut ct.tripletpos stringfun query
                 )
               else ()
             in
@@ -899,7 +900,7 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
                          (string_of_formula ipre)
                          (string_of_formula apre)
                 in
-                check_taut ct.tripletloc stringfun query
+                check_taut ct.tripletpos stringfun query
             );
             (* internal bo/uo parallelism *)
             check_boparallel true vassigns ct;
@@ -915,11 +916,11 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
               Printf.sprintf "self-uo stability of %s" (Intfdesc.string_of_intfdesc cintf) 
             in
             if not (needs_uo) then
-              avoided ct.tripletloc "check of" stringfun
+              avoided ct.tripletpos "check of" stringfun
             else
               (let cirec = cintf.irec in
                let query = Stability.uo_stable_internal_irecs cirec cirec in
-               check_taut ct.tripletloc stringfun query;
+               check_taut ct.tripletpos stringfun query;
               )
             ;
             (* inclusion in guarantee *)
@@ -968,7 +969,7 @@ let checkproof_prog {p_preopt=preopt; p_givopt=givopt; p_ts=threads; p_postopt=p
     let vset = List.fold_left (Thread.assertion_fold Modality.get_coherence_vars) vset threads in
     Coherence.coherence_variables := vset;
     if not (NameSet.is_empty vset) && not (!Settings.param_SCloc) then
-      report (Error (dummyloc,
+      report (Error (dummy_spos,
                      Printf.sprintf "coherence assertions on %s not allowed with -SCloc false"
                                     (prefixed_phrase_of_list string_of_name
                                                              "variable" "variables"
@@ -984,28 +985,28 @@ let checkproof_prog {p_preopt=preopt; p_givopt=givopt; p_ts=threads; p_postopt=p
       if !Settings.all_valid then Valid(gs,a) else memo_do_Z3 (q,v,sfun,a,gs) 
     in
 
-    let z3q qkind loc stringfun query =
+    let z3q qkind spos stringfun query =
       proofobs := !proofobs+1;
       curried_doZ3 qkind !verbose (fun () -> Printf.sprintf "%s: checking %s"
-                                                                 (string_of_location loc)
+                                                                 (string_of_sourcepos spos)
                                                                  (stringfun ())
                                   )
                           query (match givopt with None -> [] | Some g -> [g])
     in
   
-    let check_taut loc stringfun query = 
-     let r = z3q Tautology loc stringfun query in
-     report_z3result r loc stringfun
+    let check_taut spos stringfun query = 
+     let r = z3q Tautology spos stringfun query in
+     report_z3result r spos stringfun
     in
   
     let ask_taut = z3q Tautology in
     
     let ask_sat = z3q Satisfiable in
   
-    let avoided loc description stringfun =
+    let avoided spos description stringfun =
       if !verbose || !Settings.z3track<>Settings.Z3trackOff then
         Printf.printf "\n-- %s: avoided %s %s"
-                      (string_of_location loc)
+                      (string_of_sourcepos spos)
                       description
                       (stringfun ());
       proofobs := !proofobs+1
@@ -1032,7 +1033,7 @@ let checkproof_prog {p_preopt=preopt; p_givopt=givopt; p_ts=threads; p_postopt=p
     (* check inheritance of postcondition *)
     (match postopt with
      | None -> ()
-     | Some (loclab,progpost) ->
+     | Some (poslab,progpost) ->
          (* to avoid cheating, add a pms thread *)
          let pms_tn = !Thread.threadcount in
          Settings.temp_setting Thread.threadcount (!Thread.threadcount+1) (fun () ->
@@ -1061,7 +1062,7 @@ let checkproof_prog {p_preopt=preopt; p_givopt=givopt; p_ts=threads; p_postopt=p
                             (string_of_formula progpost)
                             (string_of_formula tposts)
            in
-           Settings.temp_setting AskZ3.in_pms true (fun () -> check_taut progpost.floc stringfun query)
+           Settings.temp_setting AskZ3.in_pms true (fun () -> check_taut progpost.fpos stringfun query)
          )
     )
   )

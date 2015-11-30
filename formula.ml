@@ -14,7 +14,7 @@ open MySet
  
 exception Error of string
 
-type formula = {floc: sourcepos; fnode: formulanode}
+type formula = {fpos: sourcepos; fnode: formulanode}
 
 (* type-check for various restrictions -- formula, assertion, aux formula, etc. 
    Don't distinguish regs, auxs, vars in this type. Check on parsing? Yes.
@@ -125,9 +125,9 @@ let var_of_fvar = sndof2
 
 (* ********************* building formula records ********************** *)
 
-let fadorn sourcepos fnode = {floc=sourcepos; fnode=fnode}
+let fadorn sourcepos fnode = {fpos=sourcepos; fnode=fnode}
 
-let _frec = fadorn dummyloc
+let _frec = fadorn dummy_spos
 
 let _recFreg  r      = _frec (Freg r)
 let _recFvar         = _frec <...> _Fvar
@@ -337,7 +337,7 @@ let before tc ep f = match f.fnode with
   | Bfr _ -> f
   | _     -> rplacBfr f tc ep f
 
-let since tc ep f1 f2 = fadorn (loc_of_locloc f1.floc f2.floc) (Since (tc,ep,f1,f2))
+let since tc ep f1 f2 = fadorn (spos_of_sposspos f1.fpos f2.fpos) (Since (tc,ep,f1,f2))
 
 let rec universal ep f = match f.fnode with
   | Fbool true  -> f
@@ -1065,16 +1065,16 @@ let substitute mapping orig_f =
 
 let rec optreloc newloc f = 
   optmap 
-    (function | {floc=loc} when loc=newloc -> None
-              | f                          -> Some (reloc newloc {f with floc=newloc}))
+    (function | {fpos=spos} when spos=newloc -> None
+              | f                          -> Some (reloc newloc {f with fpos=newloc}))
                                           
     f
 
 and reloc newloc f = (optreloc newloc ||~ id) f 
 
-let optstriploc = optreloc dummyloc
+let optstriploc = optreloc dummy_spos
 
-let striploc = reloc dummyloc
+let striploc = reloc dummy_spos
 
 let eq f1 f2 = striploc f1 = striploc f2
 

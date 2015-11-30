@@ -49,11 +49,11 @@ let parse opts usage filename =
                     )
   | Program.ParseError(loc,s) ->
         (close_in in_channel;
-         raise (Error ("\n**SYNTAX ERROR at "^string_of_location loc ^ ": " ^ s))
+         raise (Error ("\n**SYNTAX ERROR at "^string_of_sourcepos loc ^ ": " ^ s))
         )
   | Lexer.LexError(loc,s) -> 
         (close_in in_channel;
-         raise (Error ("\n**LEXING ERROR at "^string_of_location loc ^ ": " ^ s))
+         raise (Error ("\n**LEXING ERROR at "^string_of_sourcepos loc ^ ": " ^ s))
         )
   | exn -> (close_in in_channel; raise exn)
 

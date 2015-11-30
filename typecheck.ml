@@ -5,6 +5,7 @@ open Program
 open Printer
 open Name
 open Formula
+open Location
 open Assign
 open Ftype
 open Listutils

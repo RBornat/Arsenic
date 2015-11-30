@@ -14,7 +14,7 @@ open Thread
  
 exception ParseError of sourcepos * string (* because I can't put it in Parser, and I have to put it somewhere *)
 
-type outerassert = locatedlabel * formula
+type outerassert = positionedlabel * formula
 
 type program = {p_preopt    : outerassert option;
                 p_givopt    : formula option;
@@ -28,8 +28,8 @@ let get_outerassert_lab ouaopt =
   | Some ({lablab=lab},_) -> Some lab
   | None                  -> None
 
-let string_of_outerassert (loclab, f) =
-    "{ " ^ string_of_label loclab.lablab ^ ": " ^ string_of_formula f ^ " }"
+let string_of_outerassert (poslab, f) =
+    "{ " ^ string_of_label poslab.lablab ^ ": " ^ string_of_formula f ^ " }"
 
 let threadsep = "-----------------------"
 

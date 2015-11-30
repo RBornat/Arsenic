@@ -21,9 +21,9 @@ type scloc =
   | ControlLoc 
 
 let string_of_scloc = function
-  | DoUntilLoc loc -> "DoUntilLoc " ^ string_of_location loc   
-  | WhileLoc   loc -> "WhileLoc " ^ string_of_location loc   
-  | IfLoc      loc -> "IfLoc " ^ string_of_location loc
+  | DoUntilLoc spos -> "DoUntilLoc " ^ string_of_sourcepos spos   
+  | WhileLoc   spos -> "WhileLoc " ^ string_of_sourcepos spos   
+  | IfLoc      spos -> "IfLoc " ^ string_of_sourcepos spos
   | IfArmLoc   b   -> "IfArmLoc " ^ string_of_bool b
   | ControlLoc     -> "ControlLoc"
 
@@ -55,7 +55,7 @@ type labelid = sourcepos * componentid * parentid list
 
 let string_of_labelid =
   Tuple.bracketed_string_of_triple 
-    string_of_location 
+    string_of_sourcepos 
     string_of_componentid
     string_of_parentids
 

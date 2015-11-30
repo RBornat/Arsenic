@@ -22,7 +22,7 @@ type threadbody =
    I have to put them here
  *)
 type header = (* also trailer, actually *)
-  | AssertHdr of locatedlabel * formula
+  | AssertHdr of positionedlabel * formula
   | GivenHdr  of formula
   | MacroHdr  of Name.name * Name.name list * formula
   | TMacroHdr of Name.name * Name.name list * thread
@@ -58,7 +58,7 @@ let string_of_thread {t_guar=guarantee; t_body=body; t_postopt=postopt; t_relyop
   solast "\n" string_of_knot postopt ^
   solast "\n" (solast_list "\n" string_of_rely) relyopt
 
-let threadloc {t_pos=loc} = loc
+let threadloc {t_pos=spos} = spos
 
 let threadseq {t_body=body} =
   match body with

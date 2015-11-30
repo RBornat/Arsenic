@@ -8,6 +8,7 @@ open Formula
 open Node
 open Stitch
 open Knot
+open Location
 open Assign
 open Com
 open Intfdesc
@@ -15,7 +16,7 @@ open Thread
 open Program
 
 (* This file is part of Arsenic, a proofchecker for New Lace logic.
-    Copyright (c) 2015 Richard Bornat.
+   Copyright (c) 2015 Richard Bornat.
    Licensed under the MIT license (sic): see LICENCE.txt or
    https://opensource.org/licenses/MIT
  *)
@@ -622,13 +623,13 @@ let latex_of_tmacro m ps t =
 
 let latex_of_given f = latexcommand "given" None [latex_of_formula f]
 
-let latex_of_outerassert init (loclab, f) =
-  latexcommand "assert" None [latex_of_label loclab.lablab ^ latexcolon ^ latex_of_formula f] ^
+let latex_of_outerassert init (poslab, f) =
+  latexcommand "assert" None [latex_of_label poslab.lablab ^ latexcolon ^ latex_of_formula f] ^
   (if init then " " ^ vspace 3 else "")
 
 let latex_of_program filename {p_hdrs=headers; p_ts = ts; p_postopt=postopt } =
   let latex_of_header = function
-  | AssertHdr (loclab, f) -> latex_of_outerassert true (loclab, f)
+  | AssertHdr (poslab, f) -> latex_of_outerassert true (poslab, f)
   | GivenHdr  g           -> latexcommand "given" None [latex_of_formula g]
   | MacroHdr (m,ps,f)     -> latex_of_macro m ps f
   | TMacroHdr (m,ps,t)    -> latex_of_tmacro m ps t
