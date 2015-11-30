@@ -691,10 +691,25 @@ stitchlist:
   |                                     {[]}
 
 stitch:
-  | order node LBRACE formula RBRACE COLON formula            
-                                        { stitchadorn $1 $2 (Some (check_assertion false $4)) (check_assertion false $7) }
-  | order node COLON formula            { stitchadorn $1 $2 None (check_assertion false $4) }
+  | order node stitchlocopt stitchspopt COLON formula            
+                                        { stitchadorn $1 $2 $3 $4 (check_assertion false $6) }
 
+stitchlocopt:
+  | TIMES location LPAR name RPAR       { Some ($2,
+                                                match $4 with
+                                                | "t" -> true
+                                                | "f" -> false
+                                                | _   -> bad (Printf.sprintf "%s should be t or f in *%s(%s)"
+                                                                      $4 (string_of_location $2) $4
+                                                             )
+                                               )
+                                        }
+  |                                     { None }
+  
+stitchspopt:
+  | LBRACE formula RBRACE               { Some (check_assertion false $2) }
+  |                                     { None }
+  
 node:
   | label                               { Cnode $1 }
   | label LPAR name RPAR                { CEnode ($1,
