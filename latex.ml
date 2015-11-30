@@ -353,20 +353,20 @@ let latex_of_knot =
   in
   lok
 
-
 let latex_of_assign a =
-  let soa lhs rhs = lhs ^ ":=" ^ rhs in
+  let soa synchro lhs rhs = lhs ^ (string_of_synchro synchro) ^ rhs in
   match a with
-  | RbecomesE (r,f) -> soa (latex_of_reg r) (latex_of_formula f)
-  | LocbecomesEs loces ->
-      (match loces with
+  | RbecomesE (r,f) -> soa LocalAssign (latex_of_reg r) (latex_of_formula f)
+  | LocbecomesEs (b,loces) ->
+      (let op = if b then StoreConditional else LocalAssign in
+       match loces with
        | [loc,e] ->
            let rhs =
              match show_aux(), e.fnode with
              | false, Tuple (e::_) -> e
              | _                   -> e
            in
-           soa (latex_of_loc loc) (latex_of_formula rhs)
+           soa op (latex_of_loc loc) (latex_of_formula rhs)
        | _     ->
            let locs, es = List.split loces in
            let string_of_rhs e =
@@ -375,17 +375,18 @@ let latex_of_assign a =
              | true, Tuple _       -> "(" ^ latex_of_formula e ^ ")"
              | _                   -> latex_of_formula e
            in
-           soa (string_of_list latex_of_loc "," locs) (string_of_list string_of_rhs "," es)
+           soa op (string_of_list latex_of_loc "," locs) (string_of_list string_of_rhs "," es)
       )
-  | RsbecomeLocs rslocs -> 
-      (match rslocs with
+  | RsbecomeLocs (b,rslocs) -> 
+      (let op = if b then LoadLogical else LocalAssign in
+       match rslocs with
        | [rs,loc] ->
            let lhs =
              match show_aux(), rs with
              | false, r::_ -> [r]
              | _           -> rs
            in
-           soa (string_of_list latex_of_reg "," lhs) (latex_of_loc loc)
+           soa op (string_of_list latex_of_reg "," lhs) (latex_of_loc loc)
            
        | _      ->
            let rss, locs = List.split rslocs in
@@ -394,7 +395,7 @@ let latex_of_assign a =
              | [r] -> latex_of_reg r
              | _   -> "(" ^ string_of_list latex_of_reg "," rs ^ ")"
            in
-           soa (string_of_list string_of_lhs "," rss) (string_of_list latex_of_loc "," locs)
+           soa op (string_of_list string_of_lhs "," rss) (string_of_list latex_of_loc "," locs)
       )
 
 let lot lok sep latex_of_alpha {tripletknot=knot; tripletlab=lab; tripletof=alpha} =
@@ -445,13 +446,13 @@ and latex_of_structcom trisep indent sc =
   in
   match sc.structcomnode with 
   | If (c,s1,[])        -> String.concat sep 
-                            [sname "if" ^ " " ^ latex_of_triplet " " latex_of_formula c ^ 
+                            [sname "if" ^ " " ^ latex_of_triplet " " latex_of_conditional c ^ 
                                        " " ^ sname "then";
                              lis s1;
                              sname "fi"
                             ]
   | If (c,s1,s2)        -> String.concat sep 
-                            [sname "if" ^ " " ^ latex_of_triplet " " latex_of_formula c ^ 
+                            [sname "if" ^ " " ^ latex_of_triplet " " latex_of_conditional c ^ 
                                        " " ^ sname "then";
                              lis s1;
                              sname "else";
@@ -459,7 +460,7 @@ and latex_of_structcom trisep indent sc =
                              sname "fi"
                             ]
   | While (c,s)         -> String.concat sep 
-                            [sname "while" ^ " " ^ latex_of_triplet " " latex_of_formula c ^ 
+                            [sname "while" ^ " " ^ latex_of_triplet " " latex_of_conditional c ^ 
                                        " " ^ sname "do";
                              lis s;
                              sname "od"
@@ -467,9 +468,14 @@ and latex_of_structcom trisep indent sc =
   | DoUntil (s,c)       -> String.concat sep 
                             [sname "do";
                              lis s;
-                             sname "until" ^ " " ^ latex_of_triplet " " latex_of_formula c 
+                             sname "until" ^ " " ^ latex_of_triplet " " latex_of_conditional c 
                             ]
 
+and latex_of_conditional c =
+  match c with
+  | CExpr f   -> latex_of_formula f
+  | CAssign a -> latex_of_assign a
+  
 and latex_of_seq withcols trisep indent cs =
   let rec lsq cs =
     (* it appears to be necessary to line things up _locally_ -- i.e. sequences of comtriplets *)

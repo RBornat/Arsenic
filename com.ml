@@ -20,9 +20,13 @@ and scomnode =
 and structcom = {structcompos: sourcepos; structcomnode: structcomnode}
 
 and structcomnode = 
-  | If of formula triplet * seq * seq
-  | While of formula triplet * seq
-  | DoUntil of seq * formula triplet 
+  | If of condition triplet * seq * seq
+  | While of condition triplet * seq
+  | DoUntil of seq * condition triplet 
+
+and condition = 
+  | CExpr of formula
+  | CAssign of assign
   
 and 'a triplet = 
   { tripletpos: sourcepos;
@@ -122,23 +126,28 @@ and string_of_seq indent cs =
 and string_of_structcom indent sc = 
   let indent' = indent ^ "  " in
   match sc.structcomnode with 
-  | If (c,s1,[])        -> "if " ^ string_of_triplet string_of_formula c ^ 
+  | If (c,s1,[])        -> "if " ^ string_of_triplet string_of_condition c ^ 
                            " then\n" ^ indent' ^ string_of_seq indent' s1 ^ 
                            "\n" ^ indent ^ "fi"
-  | If (c,s1,s2)        -> "if " ^ string_of_triplet string_of_formula c ^ 
+  | If (c,s1,s2)        -> "if " ^ string_of_triplet string_of_condition c ^ 
                            " then\n" ^ indent' ^ string_of_seq indent' s1 ^ 
                            "\n" ^ indent ^ "else\n" ^ indent' ^ string_of_seq indent' s2 ^ 
                            "\n" ^ indent ^ "fi"
-  | While (c,s)         -> "while " ^ string_of_triplet string_of_formula c ^ 
+  | While (c,s)         -> "while " ^ string_of_triplet string_of_condition c ^ 
                            " do\n" ^ indent' ^ string_of_seq indent' s ^ 
                            "\n" ^ indent ^ "od"
   | DoUntil (s,c)       -> "do\n" ^ indent' ^ string_of_seq indent' s ^ 
-                           "\n" ^ indent ^ "until " ^ string_of_triplet string_of_formula c 
+                           "\n" ^ indent ^ "until " ^ string_of_triplet string_of_condition c 
 
+and string_of_condition = function
+  | CExpr f -> string_of_formula f
+  | CAssign a -> string_of_assign a
+  
 (* *************************** folds for com ************************* *)
 
-let rec tripletfold f3c f3f v = function
-  | Com  triplet -> f3c v triplet
+let rec tripletfold f3c f3f v com = 
+  match com with
+  | Com triplet  -> f3c v triplet
   | Structcom sc -> 
       (let foldf = tripletfold f3c f3f in
        match sc.structcomnode with

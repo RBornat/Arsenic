@@ -83,6 +83,8 @@ rule make_token = parse
   | ';'         {SEMICOLON}
   
   | ":="        {BECOMES}
+  | ":=*"       {LOADLOGICAL}
+  | "*:="       {STORECONDITIONAL}
   
   | '+'         {PLUS}
   | '-'         {MINUS}

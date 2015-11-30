@@ -150,18 +150,18 @@
   (* filtering assigns -- parsed as lhs list := formula list, where each lhs is a
      list of Assign.location. All lists are non-empty -- see loclist and formulas entries in parser
    *)
-  let classify_assign ok_logc is_com binders (lefts,rights) =
+  let classify_assign ok_logc is_com binders (lefts,synchro,rights) =
     let string_of_lhs = function
       | [a] -> string_of_location a
       | lhs -> "(" ^ string_of_list string_of_location "," lhs ^ ")"
     in
     let assign () = "assignment " ^ 
                     string_of_list string_of_lhs "," lefts ^
-                    ":=" ^
+                    (string_of_synchro synchro) ^
                     string_of_list string_of_formula "," rights
     in
     let bad_interferenceform () = 
-      bad (assign() ^ " in interference description: only location:=formula[,formula] is allowed")
+      bad (assign() ^ " in interference description: only location:=formula[,formula]* assignments are allowed")
     in
     let isreg_lhs lhs = 
       match lhs with 
@@ -249,11 +249,30 @@
            check_single true (List.hd rslocs);
            List.iter (check_single false) (List.tl rslocs);
            (* that's it, I think *)
-           RsbecomeLocs rslocs
+           let b = 
+             match synchro, rslocs with
+             | LocalAssign     , _   -> false
+             | LoadLogical     , [_] -> true
+             | LoadLogical     , _   -> bad ("multi-location load-logical " ^ string_of_synchro synchro ^
+                                           " register assignment"
+                                          )
+             | StoreConditional, _   -> bad ("store-conditional operator " ^ string_of_synchro synchro ^
+                                             " used in register assignment"
+                                            )
+           in
+           RsbecomeLocs (b, rslocs)
        | []  , rights ->
            ((* it had better be a single-register assignment *)
-            match lefts, rights with
-            | [[location]], [e] -> RbecomesE (locv location,e)
+            match lefts, rights, synchro with
+            | [[location]], [e], LocalAssign      -> RbecomesE (locv location,e)
+            | [[location]], [e], StoreConditional -> 
+                    bad ("store-conditional operator " ^ string_of_synchro synchro ^
+                         " used in register assignment"
+                        )
+            | _, _, LoadLogical                   ->
+                    bad ("load-logical operator " ^ string_of_synchro synchro ^
+                         " used in register assignment with non-store rhs"
+                        )
             | _            ->
                 bad ("register:=formula assignment must have one register, one formula")
            )
@@ -326,7 +345,23 @@
        check_single true (List.hd loces);
        List.iter (check_single false) (List.tl loces);
        (* and that seems to be it *)
-       LocbecomesEs loces
+       let b =
+         match loces, is_com, synchro with
+         | _  , true , LocalAssign      
+         | [_], false, LocalAssign      -> false
+         | _  , false, LocalAssign      -> bad_interferenceform ()
+         | [_], true , StoreConditional -> true 
+         | _  , true , StoreConditional -> bad ("store-conditional operator " ^ string_of_synchro synchro ^
+                                                " used in multi-location assignment"
+                                               ) 
+         | _  , false, StoreConditional -> bad ("store-conditional operator " ^ string_of_synchro synchro ^
+                                                " used in interference assignment"
+                                               )
+         | _  , _    , LoadLogical      -> bad ("load-logical operator " ^ string_of_synchro synchro ^
+                                                " used in location assignment"
+                                               )
+       in
+       LocbecomesEs (b, loces)
       )
     else
       (let regs, others = List.partition (is_lhs isreg_lhs) lefts in
@@ -343,15 +378,14 @@
            )
       )
        
-  let check_ext_assign binders assign = 
-    match classify_assign true false binders assign with
-    | LocbecomesEs _ as a -> a
-    | assign            -> 
-        bad (Printf.sprintf "interference description contains register assign %s"
-                            (string_of_assign assign)
-            )
+  let check_intf_assign binders assign = 
+    classify_assign true false binders assign 
    
-
+  let check_conditional_assign assign =
+    match classify_assign true true NameSet.empty assign with
+    | LocbecomesEs _ as a -> a
+    | _                   -> bad ("assignment in conditional must be store-conditional " ^ string_of_synchro StoreConditional)
+    
   let rec makebinder bindf locnames f = 
     match locnames with
     | [] -> f (* we can't actually parse an empty locname list, so this is just for recursion *)
@@ -505,7 +539,7 @@
 %token WHILE DO OD UNTIL
 %token SKIP ASSERT
 
-%token BECOMES 
+%token BECOMES LOADLOGICAL STORECONDITIONAL
 
 /* arith operators */
 %token PLUS MINUS TIMES DIV MOD
@@ -803,7 +837,9 @@ tcep:
   |                                     {Here, Now}
   
 assign:
-  | lhss BECOMES formulas               {$1,$3}
+  | lhss BECOMES formulas               {$1,LocalAssign,$3}
+  | lhss LOADLOGICAL formulas           {$1,LoadLogical,$3}
+  | lhss STORECONDITIONAL formulas      {$1,StoreConditional,$3}
   
 lhss:
   | lhs                                 {[$1]}
@@ -836,7 +872,8 @@ structcom:
   | DO seq UNTIL condition              {structsimplecomadorn(DoUntil ($2,$4))}
 
 condition:
-  | preknot loclabel COLON formula      { tripletadorn $1 $2 $4 }
+  | preknot loclabel COLON assign       { tripletadorn $1 $2 (CAssign (check_conditional_assign $4)) }
+  | preknot loclabel COLON formula      { tripletadorn $1 $2 (CExpr $4) }
  
 primary:
   | INT                                 {fadorn(Fint $1)}
@@ -999,7 +1036,7 @@ interferes:
 
 interference:
   | idescription                        {let binders, (pre, assign) = $1 in
-                                         let assign = check_ext_assign binders assign in
+                                         let assign = check_intf_assign binders assign in
                                          intfadorn {i_binders  = binders;
                                                     i_pre      = pre;
                                                     i_assign   = assign

@@ -176,8 +176,12 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
      | CidControl   ft -> 
          let cassert =
            match source with
-           | CEnode (_,b) -> Order.quotient order ik
-                                 (if b then ft.tripletof else _recNot(ft.tripletof))
+           | CEnode (_,b) -> let tof = match ft.tripletof with
+                                       | CExpr f -> f
+                                       | CAssign a -> _recTrue (* for now *)
+                             in
+                             Order.quotient order ik
+                                 (if b then tof else _recNot tof)
            | _            ->
                raise (Crash (Printf.sprintf "Checkproof.sourcepost_of_stitch %s %s %s %s"
                                             (string_of_order order)
@@ -927,10 +931,10 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
             check_intf_included "guarantee" (intf_of_triplet External ct) thread.t_guar
       | Assign _ -> ()
     in
-    let check_ftriplet () ft =
-      check_knot_of_triplet rely assigns string_of_formula ft
+    let check_ctriplet () ft =
+      check_knot_of_triplet rely assigns string_of_condition ft
     in
-    List.iter (Com.tripletfold check_comtriplet check_ftriplet ()) seq;
+    List.iter (Com.tripletfold check_comtriplet check_ctriplet ()) seq;
     match thread.t_postopt with
     | Some knot -> check_knot "" rely assigns None knot
     | None      -> ()

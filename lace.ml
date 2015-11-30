@@ -72,18 +72,18 @@ let rec labmaps_com parents map = function
   | Structcom sc ->
       (match sc.structcomnode with
        | DoUntil (seq,ft) ->
-           let parents = pushparent (DoUntilLoc sc.structcompos) parents in
+           let parents = pushparent (DoUntilPos sc.structcompos) parents in
            let map = labmaps_seq parents map seq in
-           addnewlabel ft.tripletlab (CidControl ft) (pushparent ControlLoc parents) map
+           addnewlabel ft.tripletlab (CidControl ft) (pushparent ControlPos parents) map
        | While (ft,seq) -> 
-           let parents = pushparent (WhileLoc sc.structcompos) parents in
-           let map = addnewlabel ft.tripletlab (CidControl ft) (pushparent ControlLoc parents) map in
+           let parents = pushparent (WhilePos sc.structcompos) parents in
+           let map = addnewlabel ft.tripletlab (CidControl ft) (pushparent ControlPos parents) map in
            labmaps_seq parents map seq
        | If (ft,sthen,selse) ->
-           let parents = pushparent (IfLoc sc.structcompos) parents in
-           let map = addnewlabel ft.tripletlab (CidControl ft) (pushparent ControlLoc parents) map in
-           let map = labmaps_seq (pushparent (IfArmLoc true) parents) map sthen in
-           labmaps_seq (pushparent (IfArmLoc false) parents) map selse
+           let parents = pushparent (IfPos sc.structcompos) parents in
+           let map = addnewlabel ft.tripletlab (CidControl ft) (pushparent ControlPos parents) map in
+           let map = labmaps_seq (pushparent (IfArmPos true) parents) map sthen in
+           labmaps_seq (pushparent (IfArmPos false) parents) map selse
       )
 
 and labmaps_seq parents map =
@@ -124,13 +124,13 @@ let check_labels_thread labmap thread =
     try 
       let sparents = get_parents slab labmap in 
       match sparents with
-      | (_,ControlLoc)::_ ->
+      | (_,ControlPos)::_ ->
           (* the appropriate use of the source depends on the parentage of the triplet *)
           let gooduses, badcall = 
             match List.hd (List.tl sparents) with
-            | _, IfLoc _ -> 
+            | _, IfPos _ -> 
                 (match pidopt (enclosing_if tparents) with
-                 | Some (_, IfArmLoc b) -> 
+                 | Some (_, IfArmPos b) -> 
                      [CEnode (slab,b)], ("in " ^ (if b then "then" else "else") ^ " arm of conditional")
                  | _                    -> 
                      [CEnode (slab,true); CEnode(slab,false)], ""
@@ -138,8 +138,8 @@ let check_labels_thread labmap thread =
             | _, looploc ->
                 let inner, outer = 
                   match looploc with
-                  | WhileLoc _         -> CEnode (slab,true) , CEnode(slab,false)
-                  | _ (* DoUntilLoc *) -> CEnode (slab,false), CEnode(slab,true)
+                  | WhilePos _         -> CEnode (slab,true) , CEnode(slab,false)
+                  | _ (* DoUntilPos *) -> CEnode (slab,false), CEnode(slab,true)
                 in
                 let encloop = pidopt (common_ancestors sparents tparents) in
                 match encloop with 
@@ -169,7 +169,7 @@ let check_labels_thread labmap thread =
                                )
                         )
           )
-      | _ (* not ControlLoc *) ->
+      | _ (* not ControlPos *) ->
           (match source with
            | CEnode _ ->
                report (Error (pos_of_stitch stitch,

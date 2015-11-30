@@ -252,12 +252,12 @@ let typeassign_assign cxt bcxt a =
     typeassign_formula cxt bcxt t (singleton_or_tuple fs)
   in
   match a with 
-  | RbecomesE (r,e)     -> doit cxt bcxt (VarLoc r) [e] (* cheat *)
-  | LocbecomesEs loces  -> 
+  | RbecomesE (r,e)         -> doit cxt bcxt (VarLoc r) [e] (* cheat *)
+  | LocbecomesEs (b,loces)  -> 
       List.fold_left (fun (cxt,bcxt) (loc,e) -> doit cxt bcxt loc [e])
                      (cxt,bcxt) 
                      loces
-  | RsbecomeLocs rslocs -> 
+  | RsbecomeLocs (b,rslocs) -> 
       List.fold_left (fun (cxt,bcxt) (rs,loc) -> doit cxt bcxt loc (List.map _recFreg rs))
                      (cxt,bcxt) 
                      rslocs

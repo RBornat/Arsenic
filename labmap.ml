@@ -14,29 +14,29 @@ open Knot
  *)
  
 type scloc = 
-  | DoUntilLoc of sourcepos   
-  | WhileLoc   of sourcepos   
-  | IfLoc      of sourcepos
-  | IfArmLoc   of bool
-  | ControlLoc 
+  | DoUntilPos of sourcepos   
+  | WhilePos   of sourcepos   
+  | IfPos      of sourcepos
+  | IfArmPos   of bool
+  | ControlPos 
 
 let string_of_scloc = function
-  | DoUntilLoc spos -> "DoUntilLoc " ^ string_of_sourcepos spos   
-  | WhileLoc   spos -> "WhileLoc " ^ string_of_sourcepos spos   
-  | IfLoc      spos -> "IfLoc " ^ string_of_sourcepos spos
-  | IfArmLoc   b   -> "IfArmLoc " ^ string_of_bool b
-  | ControlLoc     -> "ControlLoc"
+  | DoUntilPos spos -> "DoUntilPos " ^ string_of_sourcepos spos   
+  | WhilePos   spos -> "WhilePos " ^ string_of_sourcepos spos   
+  | IfPos      spos -> "IfPos " ^ string_of_sourcepos spos
+  | IfArmPos   b    -> "IfArmPos " ^ string_of_bool b
+  | ControlPos      -> "ControlPos"
 
 type componentid =
   | CidSimplecom of simplecom triplet
-  | CidControl   of formula triplet
+  | CidControl   of condition triplet
   | CidInit      of label * formula
   | CidFinal     of label * formula
   | CidThreadPost of knot
   
 let string_of_componentid = function
   | CidSimplecom ct  -> string_of_triplet string_of_simplecom ct
-  | CidControl ft    -> string_of_triplet string_of_formula ft
+  | CidControl ft    -> string_of_triplet string_of_condition ft
   | CidInit  (lab,f)
   | CidFinal (lab,f) -> Printf.sprintf "{%s:%s}"
                                        (string_of_label lab)
@@ -97,11 +97,11 @@ let encloses outer inner =
 let rec tightest_loop parents =
   match parents with
   | []                           -> []
-  | (_, ControlLoc  ) :: parents
-  | (_, IfLoc      _) :: parents
-  | (_, IfArmLoc   _) :: parents -> tightest_loop parents
-  | (_, DoUntilLoc _) :: _ 
-  | (_, WhileLoc   _) :: _       -> parents
+  | (_, ControlPos  ) :: parents
+  | (_, IfPos      _) :: parents
+  | (_, IfArmPos   _) :: parents -> tightest_loop parents
+  | (_, DoUntilPos _) :: _ 
+  | (_, WhilePos   _) :: _       -> parents
 
 let rec common_ancestors bparents cparents =
   let bparents = tightest_loop bparents in
@@ -125,8 +125,8 @@ let weakest_inner_loop outerps innerps =
     else
       match ips with 
       | []                        -> None
-      | (_, DoUntilLoc _) :: ips'
-      | (_, WhileLoc   _) :: ips' -> wil ips' |~~ (fun _ -> Some ips)
+      | (_, DoUntilPos _) :: ips'
+      | (_, WhilePos   _) :: ips' -> wil ips' |~~ (fun _ -> Some ips)
       | _                 :: ips' -> wil ips'
   in
   wil innerps
@@ -134,8 +134,8 @@ let weakest_inner_loop outerps innerps =
 let rec enclosing_if parents =
   match parents with 
   | []                   -> []
-  | (_, IfArmLoc _) :: _
-  | (_, IfLoc    _) :: _ -> parents
+  | (_, IfArmPos _) :: _
+  | (_, IfPos    _) :: _ -> parents
   | _ :: parents         -> enclosing_if parents
   
 let pidopt = function

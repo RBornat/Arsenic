@@ -1,0 +1,43 @@
+{ aa:lock=(0,0,0)/\tk=0 }
+----------------------
+
+macro latest(A,B,C) = lock=(A,B,C)/\_U(forall L (lock=L!=(A,B,C)=>_c(lock,L,(A,B,C))))
+
+guar [  [B].latest(0,0,B)/\_B(tk=B) | lock:=1,1,B;
+        [B].latest(1,1,B)/\_B(tk=B) | tk:=B+1;
+       [B]._B(lock=(1,1,B)/\tk=B+1) | lh:=(0,0,B+1)
+     ]
+
+macro loopinv = forall (A,B,C) ((lock=(A,B,C)=>tk>=C) /\ (A=0=>B=0) /\ (latest(0,0,C)=>tk=C))
+                                
+while bb:true do
+    {* bo aa: loopinv *} \->/ ({* lo e: loopinv *} \/ {* lo dd(f): loopinv *})
+                                                        a:skip; 
+    do
+        {* lo a: loopinv *}                             b:r1,raux_,rauxB :=* lock
+    until {* lo b: loopinv *}                       cc:r1=0;
+    
+    if {* lo b *lock(t): r1=0=>lock=(0,0,rauxB);
+          lo cc(t): r1=0 /\ loopinv *} 
+                                                    dd: lock *:= 1,1,rauxB+1
+    then 
+        {* lo dd(t): latest(1,1,rauxB+1)/\tk=rauxB/\loopinv *}   c: r2:=tk;
+        {* lo c: latest(1,1,rauxB+1)/\tk=r2=rauxB/\loopinv *}    d: tk:=r2+1;
+        {* bo d {lock=(1,1,r2)/\tk=r2+1/\loopinv}: 
+                _B(lock=(1,1,r2)/\tk=r2+1)/\loopinv *}          e: lock:=0,0,r2+1
+    fi
+od
+(* rely [  [A,B].latest(0,0,B)/\_B(tk=B)/\0!=A!=1 | lock:=1,A,B;
+        [A,B].latest(1,A,B)/\_B(tk=B)/\0!=A!=1 | tk:=B+1;
+       [A,B]._B(lock=(1,A,B)/\tk=B+1)/\0!=A!=1 | lh:=(0,0,B+1)
+     ] *)
+(* ----------------------
+guar [  [D].D%W=1/\lh=D/\_B(tk=D) | tk:=D+1;
+      [D].D%W=1/\_B(lh=D=tk-1) | lh:=D+1
+     ]
+
+----------------------
+guar [  [E].E%W=2/\lh=E/\_B(tk=E) | tk:=E+1;
+      [E].E%W=2/\_B(lh=E=tk-1) | lh:=E+1
+     ]
+*)

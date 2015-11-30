@@ -8,7 +8,7 @@ open Location
 open Assign
 
 (* This file is part of Arsenic, a proofchecker for New Lace logic.
-    Copyright (c) 2015 Richard Bornat.
+   Copyright (c) 2015 Richard Bornat.
    Licensed under the MIT license (sic): see LICENCE.txt or
    https://opensource.org/licenses/MIT
  *)
@@ -185,27 +185,26 @@ let strongest_post with_result pre assign =
             )
   in
   match assign with
-  | RbecomesE  (r,e)    -> sp_multiple false [r, old_name r] [VarLoc r] [e]
-  | LocbecomesEs loces  -> let locs, es = List.split loces in
-                           sp_multiple true (List.map (function VarLoc v         -> v, old_name v
-                                                       |        ArrayLoc (v,ixf) -> v, old_name v 
-                                                      )
-                                                      locs
-                                            )
-                                            locs
-                                            es
-  | RsbecomeLocs rslocs -> 
-      let rss, locs = List.split rslocs in
-      let rs = List.concat rss in
-      let rs' = List.map old_name rs in
-      let sub = sp_substitute (List.combine rs rs') in
-      conjoin 
-        (sub pre ::
-         List.map (fun (rs,loc) -> 
-                     decorate (_recEqual (singleton_or_tuple (List.map _recFreg rs)) 
-                                         (_recFloc loc)
-                              )
-                  )
-                  rslocs
-        )
+  | RbecomesE  (r,e)        -> sp_multiple false [r, old_name r] [VarLoc r] [e]
+  | LocbecomesEs (b,loces)  -> let locs, es = List.split loces in
+                               sp_multiple true (List.map (function VarLoc v         -> v, old_name v
+                                                           |        ArrayLoc (v,ixf) -> v, old_name v 
+                                                          )
+                                                          locs
+                                                )
+                                                locs
+                                                es
+  | RsbecomeLocs (b,rslocs) -> let rss, locs = List.split rslocs in
+                               let rs = List.concat rss in
+                               let rs' = List.map old_name rs in
+                               let sub = sp_substitute (List.combine rs rs') in
+                               conjoin 
+                                 (sub pre ::
+                                  List.map (fun (rs,loc) -> 
+                                              decorate (_recEqual (singleton_or_tuple (List.map _recFreg rs)) 
+                                                                  (_recFloc loc)
+                                                       )
+                                           )
+                                           rslocs
+                                 )
                           
