@@ -1,40 +1,42 @@
 { aa:lock=(0,0,0)/\tk=0 }
 ----------------------
 
-guar [ [B,C].lock=(0,B,C)/\_B(tk=C) | lock:=1,0,C;
-         [C].lock=(1,0,C)/\_B(tk=C) | tk:=C+1;
-       [C]._B(lock=(1,0,C)/\tk=C+1) | lock:=(0,0,C+1)
+guar [                          [B,C].lock=(0,B,C)/\_B(tk=C) | lock*:=1,0,C;
+                                  [C].lock=(1,0,C)/\_B(tk=C) | tk:=C+1;
+       [C]._B(lock=(1,0,C)/\tk>=C+1/\(latest(lock)=>tk=C+1)) | lock:=(0,0,C+1)
      ]
 
-macro loopinv = latest(lock)=> exists(B,C)(lock=(0,B,C)=>tk=C)
+macro loopinv = latest(lock) => forall(B,C)(lock=(0,B,C)=>_B(tk=C))
                                 
 while bb:true do
     {* bo aa: loopinv *} \->/ ({* lo e: loopinv *} \/ {* lo dd(f): loopinv *})
-                                                        a:skip; 
+                                                                        a:skip; 
     do
-        {* lo a: loopinv *}                             b:r1,raux_,rauxB :=* lock
-    until {* lo b: loopinv *}                       cc:r1=0;
+        {* lo a: loopinv *}                                             b:r1,raux_,rauxC :=* lock
+    until {* lo b: loopinv *}                                       cc:r1=0;
     
-    if {* lo b *lock(t): r1=0=>lock=(0,raux_,rauxB);
-          lo cc(t): r1=0 /\ loopinv *}              dd: lock *:= 1,0,rauxB
+    if {* lo b *lock(t): r1=0=>lock=(0,raux_,rauxC);
+          lo cc(t): r1=0 /\ loopinv *}                              dd: lock *:= 1,0,rauxC
     then  
-        {* lo dd(t): lock=(1,0,rauxB)/\tk=rauxB/\loopinv *}     c: r2:=tk;
-        {* lo c: lock=(1,0,rauxB)/\tk=r2=rauxB/\loopinv *}      d: tk:=r2+1;
+        {* lo dd(t): lock=(1,0,rauxC)/\_B(tk=rauxC) *}                  c: r2:=tk;
+        {* lo c: lock=(1,0,rauxC)/\_B(tk=r2=rauxC) *}                   d: tk:=r2+1;
         {* bo d {lock=(1,0,r2)/\tk=r2+1/\loopinv}: 
-                _B(lock=(1,0,r2)/\tk=r2+1)/\loopinv *}          e: lock:=0,0,r2+1
+                _B(lock=(1,0,r2)/\tk=r2+1/\loopinv) *}
+        [* _B(lock=(1,0,r2)/\tk>=r2+1/\(latest(lock)=>tk=r2+1)) *]      e: lock:=0,0,r2+1
     fi
 od
-(* rely [  [A,B].latest(0,0,B)/\_B(tk=B)/\0!=A!=1 | lock:=1,A,B;
-        [A,B].latest(1,A,B)/\_B(tk=B)/\0!=A!=1 | tk:=B+1;
-       [A,B]._B(lock=(1,A,B)/\tk=B+1)/\0!=A!=1 | lh:=(0,0,B+1)
-     ] *)
-(* ----------------------
-guar [  [D].D%W=1/\lh=D/\_B(tk=D) | tk:=D+1;
-      [D].D%W=1/\_B(lh=D=tk-1) | lh:=D+1
+rely [                          [A,B,C].lock=(0,B,C)/\_B(tk=C)/\A!=0 | lock*:=1,A,C;
+                                  [A,C].lock=(1,A,C)/\_B(tk=C)/\A!=0 | tk:=C+1;
+       [A,C]._B(lock=(1,A,C)/\tk>=C+1/\(latest(lock)=>tk=C+1))/\A!=0 | lock:=(0,A,C+1)
+     ]
+----------------------
+guar [                          [B,C].lock=(0,B,C)/\_B(tk=C) | lock*:=1,1,C;
+                                  [C].lock=(1,1,C)/\_B(tk=C) | tk:=C+1;
+       [C]._B(lock=(1,1,C)/\tk>=C+1/\(latest(lock)=>tk=C+1)) | lock:=(0,1,C+1)
      ]
 
 ----------------------
-guar [  [E].E%W=2/\lh=E/\_B(tk=E) | tk:=E+1;
-      [E].E%W=2/\_B(lh=E=tk-1) | lh:=E+1
+guar [                          [B,C].lock=(0,B,C)/\_B(tk=C) | lock*:=1,2,C;
+                                  [C].lock=(1,2,C)/\_B(tk=C) | tk:=C+1;
+       [C]._B(lock=(1,2,C)/\tk>=C+1/\(latest(lock)=>tk=C+1)) | lock:=(0,2,C+1)
      ]
-*)
