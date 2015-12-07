@@ -346,9 +346,10 @@
          | _      , true , StoreConditional -> bad ("store-conditional operator " ^ string_of_synchro synchro ^
                                                     " used in multi-location assignment"
                                                    ) 
-         | _      , false, StoreConditional -> bad ("store-conditional operator " ^ string_of_synchro synchro ^
-                                                    " used in interference assignment"
-                                                   )
+         | _      , false, StoreConditional -> true (* bad ("store-conditional operator " ^ string_of_synchro synchro ^
+                                                            " used in interference assignment"
+                                                           )
+                                                     *)
          | _      , _    , LoadLogical      -> bad ("load-logical operator " ^ string_of_synchro synchro ^
                                                     " used in location assignment"
                                                    )
