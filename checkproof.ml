@@ -114,11 +114,17 @@ let mkintf pk ct =
      in
      let defres fpre = conjoin [fpre; latest_of_loc resloc] in
      (* what's a load logical doing with a preopt? -- warning, surely? *)
+     let warn () = 
+       report (Remark (ct.tripletpos,
+                       "what's a register assignment doing with a specified interference precondition?"
+                      )
+              )
+     in
      match preopt with
      | None                      -> IntfDouble (intfdesc fkpre, intfdesc (defres fkpre))
-     | Some (IpreSimple fpre)    -> IntfDouble (intfdesc fpre, intfdesc (defres fkpre))
-     | Some (IpreRes fpreres)    -> IntfDouble (intfdesc fkpre, intfdesc fpreres)
-     | Some (IpreDouble(f,fres)) -> IntfDouble (intfdesc f, intfdesc fres) (* error message here? *)
+     | Some (IpreSimple fpre)    -> warn (); IntfDouble (intfdesc fpre, intfdesc (defres fkpre))
+     | Some (IpreRes fpreres)    -> warn (); IntfDouble (intfdesc fkpre, intfdesc fpreres)
+     | Some (IpreDouble(f,fres)) -> warn (); IntfDouble (intfdesc f, intfdesc fres) 
     )
   else
   if Assign.is_storeconditional assign then
@@ -149,7 +155,7 @@ let mkintf pk ct =
                             )
                        )
              );
-             fpreres
+             conjoin [fpreres; _recLatest Here Now (locv resloc)]
      in
      match preopt with
      | None                   -> IntfSingle (intfdesc fpreres)
@@ -258,6 +264,15 @@ let cpost pk ct =
          | PreDouble (fpre, _, _) -> (* I hope this is error-reported elsewhere *)
                                      lldefault fpre
         )
+      else
+      if Assign.is_storeconditional a then
+        (* add 'latest' to postcondition *)
+        post_of_pre (fun pre -> conjoin [Strongestpost.strongest_post true pre a; 
+                                         _recLatest Here Now (locv (Assign.reserved a))
+                                        ]
+                    )
+                    (justoneloc ct.tripletpos) 
+                    pre
       else
         apost pre
 
@@ -561,6 +576,11 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
     let tranrg intfdesc =
       let f = translate intfdesc in
       bindExists (Intfdesc.binders intfdesc) f
+    in
+    (* if it's a normal assign, don't look at storeconditionals in rgs *)
+    let normal intfdesc = not (Assign.is_storeconditional (Intfdesc.assign intfdesc)) in
+    let rgs =
+      if normal intfdesc then List.filter normal rgs else rgs
     in
     let query = _recImplies (translate intfdesc)
                             (disjoin (tranextravs freevs :: List.map tranrg rgs))
