@@ -58,7 +58,13 @@ let bo_stable_query_intfdesc assertion intfdesc =
   bo_stable_query assertion (Intfdesc.irec intfdesc)
 
 let bo_stable_query_irecs intf1 intf2 =
-  bo_stable_query (bindExists intf1.i_binders intf1.i_pre) intf2
+  let assertion = intf1.i_pre in
+  let assign1 = intf1.i_assign in
+  let assertion = if Assign.is_storeconditional assign1 
+                  then conjoin [assertion; _recLatest Here Now (Location.locv (Assign.reserved assign1))]
+                  else assertion
+  in
+  bo_stable_query (bindExists intf1.i_binders assertion) intf2
               
 let ext_stable_queries = ext_stable_checks true
 
