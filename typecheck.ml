@@ -121,12 +121,15 @@ let rec typeassign_formula cxt bcxt t f =
        unary cxt bcxt tout tin3 f3
      in
      match f.fnode with
-     | Fint              _ -> (unifytype cxt t Int, bcxt)
-     | Fbool             _ -> (unifytype cxt t Bool, bcxt)
-     | Freg              r -> (assigntype cxt t (string_of_reg r), bcxt)
+     | Fint              _ -> unifytype cxt t Int, bcxt
+     | Fbool             _ -> unifytype cxt t Bool, bcxt
+     | Freg              r -> assigntype cxt t (string_of_reg r), bcxt
      | Fvar      (_, _, v) -> (* for translation to Z3, all variable instances are typed in bcxt (see modality.ml) *)
-                              (assigntype cxt t (string_of_var v), (f,t)::bcxt)
-     | Flogc             n -> (assigntype cxt t (string_of_logc n), bcxt)
+                              assigntype cxt t (string_of_var v), (f,t)::bcxt
+     | Latest    (_, _, v) -> let vtype = new_FTypeVar () in
+                              let cxt = assigntype cxt vtype (string_of_var v) in
+                              unifytype cxt t Bool, (f,vtype)::bcxt
+     | Flogc             n -> assigntype cxt t (string_of_logc n), bcxt
      | Negarith          f -> unary  cxt bcxt Int  Int  f 
      | Not               f -> unary  cxt bcxt Bool Bool f
      | Arith     (f1,_,f2) -> binary cxt bcxt Int  Int  Int  f1 f2

@@ -539,7 +539,8 @@ let z3check_query question task noisy assertions query =
              | Sofar         _
              | Since         _
              | Cohere        _     
-             | Threaded      _     ->
+             | Threaded      _     
+             | Latest        _     ->
                  raise (Invalid_argument ("askZ3.ast_of_formula\n" ^ explain_string_of_formula orig_f ^ "\ncontains " ^ string_of_formula f))
            in
            aof orig_f

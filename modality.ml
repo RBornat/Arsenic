@@ -179,7 +179,7 @@ let var_value v tc hi vtype =
 
 let embedvariable cxt tc hi v vtype =
   let pair, f = var_value v tc hi vtype in
-  addcxt pair cxt, Some f
+  addcxt pair cxt, f
   
 (* &co<type>(x,f1,f2) arguments are
      -- variable
@@ -292,14 +292,25 @@ let embed bcxt cxt orig_f =
       | _    -> anyway2 (opttsf bounds situation tn tcopt hiopt (hiformula_of_ep ep) bcxt) cxt p
     in
     (* Printf.printf "\nf %s" (string_of_formula f); *)
-    match f.fnode with
-    | Fvar (_,_,v) when NameSet.mem v bounds ->
-        None
-    | Fvar (tc,ep,v) ->
+    let process_var cxt tc ep v f =
         let tcf = tcformula_of_tc tc in
         let epf = hiformula_of_ep ep in
         let vtype = if v=barrier_event_name then Bool else bcxt <@@> f in
-        Some (embedvariable cxt tcf epf v vtype)
+        embedvariable cxt tcf epf v vtype
+    in
+    match f.fnode with
+    | Fvar (_,_,v) when NameSet.mem v bounds ->
+        None
+    | Latest (_,_,v) when NameSet.mem v bounds ->
+        None
+    | Fvar (tc,ep,v) ->
+        let cxt, vv = process_var cxt tc ep v f in
+        Some (cxt, Some vv)
+    | Latest (tc,ep,v) ->
+        (* Latest won't be quantified, I hope. But it can be hatted or hooked *)
+        let cxt, v1 = process_var cxt tc ep v f in
+        let cxt, v2 = process_var cxt There Now v f in
+        Some (cxt, Some (_recEqual v1 v2))
     | Flogc s when NameSet.mem s bounds ->
         None
     | Flogc s ->
@@ -389,7 +400,10 @@ let embed bcxt cxt orig_f =
     | Sofar (tc, ep, sf) ->
         let do_sofar cxt tcopt extra_sf =
           match sf.fnode with
-          | Univ (Now,uf) -> tevw cxt ep (rplacSofar uf Here Now uf) (* I think this never happens ... *)
+          | Since (Here,Now,{fnode=Fandw(Now,uf)},f2) 
+              when f2=barrier_event_formula
+                          -> (* Printf.printf "\n** modality.ml got one %s" (string_of_formula f); *)
+                             tevw cxt ep (rplacSofar uf Here Now uf)
           | _             ->
               (* same as since, except from the beginning of time *)
               let hi = match hiopt with

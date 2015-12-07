@@ -62,49 +62,209 @@ let assign_of_triplet ct =
   | _        -> 
       raise (Invalid_argument ("Checkproof.assign_of_triplet " ^ string_of_triplet string_of_simplecom ct))
 
-(* intfdescs of each simplecom *)
+(* a map from pkind * simplecom triplet *)
 
-let string_of_intfmap_key = bracketed_string_of_pair
-                                  string_of_ikind
+let string_of_pkscmap_key = bracketed_string_of_pair
+                                  string_of_pkind
                                   (string_of_triplet string_of_simplecom)
 
-module IntfMap = MyMap.Make (struct type t = ikind * simplecom triplet
+module PKSCMap = MyMap.Make (struct type t = pkind * simplecom triplet
                                     let compare = Pervasives.compare
-                                    let to_string = string_of_intfmap_key
+                                    let to_string = string_of_pkscmap_key
                              end
                             )
 
+(* interference of each simplecom triplet, Elaboration and Interference (maybe I'll change those names back ...) *)
 
-let mkintf ik ct =
-  let iopt = ct.tripletof.sc_ipreopt in
-  let pre = 
-    match iopt with
-    | Some f -> f
-    | _      -> assertion_of_knot ik ct.tripletknot 
-  in
+type intf = 
+  | IntfSingle of intfdesc 
+  | IntfDouble of intfdesc * intfdesc (* normal, reserved *)
+
+let string_of_intf = function
+  | IntfSingle i        -> "IntfSingle(" ^ string_of_intfdesc i ^ ")" 
+  | IntfDouble (i,ires) -> "IntfDouble((" ^ string_of_intfdesc i 
+                                          ^ "),("
+                                          ^ string_of_intfdesc ires
+                                          ^"))"
+
+let intf_fold f v = function
+  | IntfSingle i        -> f v i 
+  | IntfDouble (i,ires) -> f (f v ires) i
+  
+let intf_iter f = intf_fold (fun () -> f) ()
+
+let latest_of_loc loc = _recLatest Here Now (Location.locv loc)
+
+let mkintf pk ct =
   let assign = assign_of_triplet ct in
-  Intfdesc.mk_intfdesc ct.tripletpos pre assign  
-
-(* postconditions of each ctriplet *)
-module CPostMap =  MyMap.Make (struct type t = ikind * simplecom triplet
-                                      let compare = Pervasives.compare
-                                      let to_string = 
-                                        bracketed_string_of_pair string_of_ikind
-                                                                 (string_of_triplet string_of_simplecom)
-                               end
+  let preopt = ct.tripletof.sc_ipreopt in
+  let defaultpre = precondition_of_knot Interference ct.tripletknot in
+  let intfdesc fpre = Intfdesc.mk_intfdesc ct.tripletpos fpre assign in
+  if Assign.is_loadlogical assign then
+    (let resloc = Assign.reserved assign in
+     let fkpre = match defaultpre with 
+                 | PreSingle fpre            -> fpre
+                 | PreDouble (fpre, locs, _) ->
+                     report (Error (ct.tripletpos,
+                                    Printf.sprintf "precondition of load-logical has reservation for %s"
+                                                   (standard_phrase_of_list string_of_location locs)
+                                   )
+                            );
+                     fpre
+     in
+     let defres fpre = conjoin [fpre; latest_of_loc resloc] in
+     (* what's a load logical doing with a preopt? -- warning, surely? *)
+     match preopt with
+     | None                      -> IntfDouble (intfdesc fkpre, intfdesc (defres fkpre))
+     | Some (IpreSimple fpre)    -> IntfDouble (intfdesc fpre, intfdesc (defres fkpre))
+     | Some (IpreRes fpreres)    -> IntfDouble (intfdesc fkpre, intfdesc fpreres)
+     | Some (IpreDouble(f,fres)) -> IntfDouble (intfdesc f, intfdesc fres) (* error message here? *)
+    )
+  else
+  if Assign.is_storeconditional assign then
+    (let resloc = Assign.reserved assign in
+     let fpreres = 
+       match defaultpre with
+       | PreSingle fpre ->
+           report (Error (ct.tripletpos,
+                          Printf.sprintf "precondition of store-conditional has no reservation for %s"
+                                         (string_of_location resloc)
+                         )
+                  );
+           fpre
+       | PreDouble (_,locs,fpreres) -> 
+           if List.exists (Location.eq resloc) locs then
+             (if List.length locs>1 then
+                report (Error (ct.tripletpos,
+                               Printf.sprintf "precondition of store-conditional has reservations for %s"
+                                              (standard_phrase_of_list string_of_location locs)
                               )
+                       )
+             )
+           else
+             (report (Error (ct.tripletpos,
+                             Printf.sprintf "precondition of store-conditional has reservations for %s but not for %s"
+                                            (standard_phrase_of_list string_of_location locs)
+                                            (string_of_location resloc)
+                            )
+                       )
+             );
+             fpreres
+     in
+     match preopt with
+     | None                   -> IntfSingle (intfdesc fpreres)
+     | Some (IpreRes fpreres) -> IntfSingle (intfdesc fpreres)
+     | Some (IpreSimple fpre) -> 
+         report (Error (ct.tripletpos,
+                        "store-conditional does not need an unreserved interference precondition"
+                       )
+                );
+         IntfSingle (intfdesc fpreres)
+     | Some (IpreDouble(_,fpreres)) -> 
+         report (Error (ct.tripletpos,
+                        "store-conditional does not need an unreserved interference precondition"
+                       )
+                );
+         IntfSingle (intfdesc fpreres)
+    )
+  else (* just an ordinary assignment *)
+    ((* check it doesn't assign to its own reservation *)
+     (match Assign.is_var_assign assign, defaultpre with
+      | true , PreDouble(_,locs,_) ->
+          let alocs = fstof2 (List.split (Assign.loces assign)) in
+          let badlocs = List.filter (fun aloc -> List.mem aloc locs) alocs in
+          if badlocs<>[] then
+            report (Error (ct.tripletpos,
+                           Printf.sprintf "precondition has %s; but it assigns to %s" 
+                                          (prefixed_phrase_of_list 
+                                                    string_of_location
+                                                    "reservation" "reservations"
+                                                    alocs
+                                          )
+                                          (standard_phrase_of_list string_of_location badlocs)
+                          )
+                   )
+      | _                          -> ()
+     );
+     match preopt with
+     | None -> 
+         (match defaultpre with
+          | PreSingle pre            -> IntfSingle (intfdesc pre)
+          | PreDouble (pre,_,preres) -> IntfDouble (intfdesc pre, intfdesc preres)
+         )
+     | Some (IpreSimple pre) ->
+         (match defaultpre with
+          | PreSingle _            -> IntfSingle (intfdesc pre)
+          | PreDouble (_,_,preres) -> IntfDouble (intfdesc pre, intfdesc preres)
+         )
+     | Some (IpreRes preres) ->
+         (match defaultpre with
+          | PreSingle pre       -> IntfDouble (intfdesc pre, intfdesc preres)
+          | PreDouble (pre,_,_) -> IntfDouble (intfdesc pre, intfdesc preres)
+         )
+     | Some (IpreDouble (pre,preres)) -> IntfDouble (intfdesc pre, intfdesc preres)
+    )
 
-let cpost ik ct =
-  let pre = assertion_of_knot ik ct.tripletknot in
+(* postconditions of each simplecom triplet *)
+
+type post = 
+  | PostSingle of formula 
+  | PostDouble of formula * location * formula (* unreserved, reservation, reserved *)
+
+let string_of_post = function
+  | PostSingle f            -> "IntfSingle(" ^ string_of_formula f ^ ")" 
+  | PostDouble (f,loc,fres) -> "PostDouble((" ^ string_of_formula f 
+                                          ^ "),"
+                                          ^ string_of_location loc
+                                          ^ ",("
+                                          ^ string_of_formula fres
+                                          ^"))"
+
+(* floc has to deliver a single location ... *)
+let post_of_pre fpre floc pre =
+  match pre with 
+  | PreSingle pre                -> PostSingle (fpre pre)
+  | PreDouble (pre, locs, preres) -> PostDouble (fpre pre, floc locs, fpre preres)
+
+(* this is a bit WRONG. It will work for variables, not for arrays yet *)
+let justoneloc pos = function
+  | []             -> raise (Crash (Printf.sprintf "%s justoneloc no locs" (string_of_sourcepos pos)))
+  | [loc]          -> loc
+  | loc::_ as locs ->
+      report (Error (pos,
+                     Printf.sprintf "precondition has more than one location reservation: %s"
+                                    (standard_phrase_of_list string_of_location locs)
+                    )
+             );
+      loc
+
+let cpost pk ct =
+  let pre = precondition_of_knot pk ct.tripletknot in
   match ct.tripletof.sc_node with
-  | Skip     -> pre
-  | Assert f -> conjoin [pre; f]
-  | Assign a -> Strongestpost.strongest_post true pre a
+  | Skip     -> post_of_pre id (justoneloc ct.tripletpos) pre
+  | Assert f -> post_of_pre (fun pre -> conjoin [pre; f]) (justoneloc ct.tripletpos) pre
+  | Assign a -> 
+      let apost pre = 
+        post_of_pre (fun pre -> Strongestpost.strongest_post true pre a) (justoneloc ct.tripletpos) pre
+      in
+      if Assign.is_loadlogical a then
+        (let lldefault fpre =
+           let resloc = Assign.reserved a in
+           let pre = PreDouble (fpre, [resloc], conjoin [fpre; _recLatest Here Now (Location.locv resloc)]) in
+           apost pre
+         in
+         match pre with
+         | PreSingle fpre         -> lldefault fpre
+         | PreDouble (fpre, _, _) -> (* I hope this is error-reported elsewhere *)
+                                     lldefault fpre
+        )
+      else
+        apost pre
 
 type z3query = z3question * bool * (unit -> string) * formula * formula list
 type z3key = z3question * formula * formula list
 
-let z3key_of_z3query (q,_,_,a,gs) = q, Formula.striploc a, List.map Formula.striploc gs
+let z3key_of_z3query (q,_,_,a,gs) = q, Formula.stripspos a, List.map Formula.stripspos gs
 
 let string_of_z3key (q,a,gs) =
   Printf.sprintf "%s %s %s"
@@ -148,9 +308,9 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
   if !verbose then 
     Printf.printf "\nstarting thread %d" threadnum;
   let intf_of_triplet = 
-    curry2 (IntfMap.vmemofun !verbose "intfdesc" 
-                             string_of_intfmap_key
-                             string_of_intfdesc 
+    curry2 (PKSCMap.vmemofun !verbose "intfdesc" 
+                             string_of_pkscmap_key
+                             string_of_intf 
                              id 
                              (uncurry2 mkintf)
            )
@@ -158,49 +318,82 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
   
   let cpost_of_ct = 
     curry2 
-      (CPostMap.vmemofun !verbose "sp"
-        (bracketed_string_of_pair string_of_ikind (string_of_triplet string_of_simplecom))
-        string_of_formula 
+      (PKSCMap.vmemofun !verbose "sp"
+        (bracketed_string_of_pair string_of_pkind (string_of_triplet string_of_simplecom))
+        string_of_post
         id 
         (uncurry2 cpost)
       ) 
   in
   
-  let sourcepost_of_stitch ik stitch =
+  let sourcepost_of_stitch pk stitch =
     let order = order_of_stitch stitch in
     let source = source_of_stitch stitch in
     let lab = label_of_node source in
     let cid = get_cid lab labmap in
-    (match cid with
-     | CidSimplecom ct -> cpost_of_ct ik ct
-     | CidControl   ft -> 
-         let cassert =
-           match source with
-           | CEnode (_,b) -> let tof = match ft.tripletof with
-                                       | CExpr f -> f
-                                       | CAssign a -> _recTrue (* for now *)
-                             in
-                             Order.quotient order ik
-                                 (if b then tof else _recNot tof)
+    let post =
+     match cid with
+      | CidSimplecom ct -> cpost_of_ct pk ct
+      | CidControl   c -> 
+          (match source with
+           | CEnode (_,b) -> 
+               (match c with
+                | CExpr   ft -> let pre = precondition_of_knot pk ft.tripletknot in
+                                post_of_pre 
+                                  (fun pre -> conjoin [pre; (if b then ft.tripletof else _recNot (ft.tripletof))])
+                                  (justoneloc ft.tripletpos)
+                                  pre
+                | CAssign ct -> (match b, precondition_of_knot pk ct.tripletknot with
+                                 | false, PreDouble (pre, _, _) -> PostSingle pre
+                                 | false, PreSingle (pre)       -> 
+                                     report (Error (ct.tripletpos, "store-conditional has no reserved constraint"));
+                                     PostSingle pre
+                                 | true , PreDouble _ ->
+                                     (match cpost_of_ct pk ct with
+                                      | PostDouble (_,_,postres) -> PostSingle postres (* I think *)
+                                      | _                        -> 
+                                         raise (Crash (string_of_sourcepos ct.tripletpos 
+                                                       ^ " sourcepost_of_stitch only one post"
+                                                      )
+                                               )
+                                     )
+                                 | true , PreSingle (pre)       -> 
+                                     report (Error (ct.tripletpos, "store-conditional has no reserved constraint"));
+                                     cpost_of_ct pk ct
+                                )
+               )
            | _            ->
-               raise (Crash (Printf.sprintf "Checkproof.sourcepost_of_stitch %s %s %s %s"
+               raise (Crash (Printf.sprintf "%s Checkproof.sourcepost_of_stitch %s %s %s %s"
+                                            (string_of_sourcepos stitch.stitchpos)
                                             (string_of_order order)
-                                            (string_of_ikind ik)
+                                            (string_of_pkind pk)
                                             (string_of_node source)
                                             (string_of_labelid (LabMap.find lab labmap))
                             )
                      )
-         in
-         conjoin [assertion_of_knot ik ft.tripletknot; cassert]
-     | CidInit (_,f)    -> universal Now (sofar Here Now f)
-     | CidThreadPost _  
-     | CidFinal      _  -> 
-         raise (Crash (Printf.sprintf "%s: stitch %s refers to thread/program postcondition"
-                                      (string_of_sourcepos (pos_of_stitch stitch))
-                                      (string_of_stitch stitch)
-                      )
-               )
-    ), spopt_of_stitch stitch
+          )
+      | CidInit (_,f)    -> PostSingle (sofar Here Now (universal Now f))
+      | CidThreadPost _  
+      | CidFinal      _  -> 
+          raise (Crash (Printf.sprintf "%s: stitch %s refers to thread/program postcondition"
+                                       (string_of_sourcepos (pos_of_stitch stitch))
+                                       (string_of_stitch stitch)
+                       )
+                )
+     in
+     let spopt = spopt_of_stitch stitch in
+     (* this thing is only called once: we can check the arity here *)
+     (match post, spopt with
+      | PostSingle _, Some (SpostDouble _) 
+      | PostSingle _, Some (SpostRes    _) ->
+          report (Error (stitch.stitchpos,
+                         Printf.sprintf "constraint source %s cannot generate a reservation postcondition"
+                                        (label_of_node stitch.stitchsource)
+                        )
+                 )
+      | _                           -> ()
+     );
+     post, spopt
   in
   
   let find_actual_ancestors memofun dummy =
@@ -243,13 +436,23 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
     if i<0 then "rely" else ("thread " ^ string_of_int i)
   in
   
-  let check_external_stability spos assertion (_,intfdesc as intf) =
+  let check_external_stability spos locopt assertion (_,intfdesc as intf) =
+    let resopt = 
+      match locopt with
+      | Some (loc, true) -> Some loc
+      | _                -> None
+    in
     let stringfun stabkind () = 
-      Printf.sprintf "%s of %s against %s (from %s)" 
+      Printf.sprintf "%s of %s against %s (from %s)%s" 
                      stabkind
                      (string_of_formula assertion) 
                      (string_of_intfdesc intfdesc)
                      (intf_from intf)
+                     (match resopt with
+                      | Some loc -> Printf.sprintf " (disregarding interference with %s)"
+                                                   (string_of_location loc)
+                      | None     -> ""
+                     )
     in
     let assigned = Intfdesc.assigned intfdesc in
     let frees = Formula.frees assertion in
@@ -257,6 +460,16 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
       avoided spos "" (stringfun "external stability check")
     else
       (let satq, extq = Stability.ext_stable_queries_intfdesc assertion intfdesc in 
+       let extq =
+         match resopt with
+         | Some loc -> let v = List.hd (Intfdesc.assigned_vars intfdesc) in
+                       (* v=hook(v)=>extq *)
+                       _recImplies (_recEqual (_recFvar Here Now v)
+                                              (_recFvar Here Was v)
+                                   )
+                                   extq
+         | None     -> extq
+       in
        (* pragmatically, satisfaction involving coherence seems to be difficult for Z3. 
           So we do it the other way round in that case.
         *)
@@ -400,6 +613,7 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
                 (string_of_sourcepos knot.knotloc)
                 (string_of_knot knot)
                 (Option.string_of_option OPSet.to_string inneropt);
+    
     let cstitch inneropt () stitch =
       if !verbose || !Settings.verbose_knots then
         Printf.printf "\n  -- looking at stitch %s inneropt %s" 
@@ -407,11 +621,11 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
                         (Option.string_of_option OPSet.to_string inneropt);
       let bnode = source_of_stitch stitch in
       let blab = label_of_node bnode in
-      let bassert = assertion_of_stitch External stitch in (* seems to be right ... *)
+      let bassert = assertion_of_stitch stitch in 
       if !verbose || !Settings.verbose_knots then
         Printf.printf "\nexamining constraint %s->%s" (string_of_node bnode) (string_of_node cnode);
       
-      (* inheritance of stitch -- we do External -> External *)
+      (* inheritance of stitch -- we do Interference -> Interference. Hmm. *)
       (* inheritance on bo is tricky: we would like to do _B(sourcepost) => embroidery.
          When sourcepost is subst_clean (no hatted or hooked subformulas), that's ok.
          If embroidery is _B(P), just do sourcepost=>P. If embroidery is a conjunction, 
@@ -462,24 +676,49 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
       let sourcepost, spopt = 
         match order with
         | So -> raise (Crash (Printf.sprintf "so in knot %s" (string_of_knot knot)))
-        | Lo 
-        | Bo -> sourcepost_of_stitch Internal stitch 
-        | Go 
-        | Uo -> sourcepost_of_stitch External stitch 
+        | _  -> sourcepost_of_stitch Elaboration stitch (* Elaboration always, even with go *)
       in
       let sourcepost =
         match spopt with
-        | None       -> sourcepost
-        | Some spost -> 
-            let query = _recImplies sourcepost spost in
-            let stringfun () = 
-              Printf.sprintf "inheritance of explicit postcondition %s from strongest_post %s"
-                             (string_of_formula spost)
-                             (string_of_formula sourcepost)
-            in
-            check_taut spost.fpos stringfun query;
-            spost
+        | None                    -> sourcepost
+        | Some (SpostSimple post) ->
+            (match sourcepost with
+             | PostSingle _               -> PostSingle post
+             | PostDouble (_,loc,postres) -> PostDouble (post, loc, postres)
+            )
+        | Some (SpostRes postres) ->
+            (match sourcepost with
+             | PostSingle post         -> 
+                 report (Error (stitch.stitchpos,
+                                Printf.sprintf "stitch source %s does not have a \
+                                                reserved postcondition, yet stitch \
+                                                has a reserved precondition"
+                                                blab
+                               )
+                        );
+                 PostDouble (post, VarLoc "??", postres)
+             | PostDouble (post,loc,_) -> PostDouble (post, loc, postres)
+            )
+        | Some (SpostDouble (post, postres)) -> 
+            (match sourcepost with
+             | PostSingle _          -> 
+                 report (Error (stitch.stitchpos,
+                                Printf.sprintf "stitch source %s does not have a \
+                                                reserved postcondition, yet stitch \
+                                                has a reserved precondition"
+                                                blab
+                               )
+                        );
+                 PostDouble (post, VarLoc "??", postres)
+             | PostDouble (_,loc,_) -> PostDouble (post, loc, postres)
+            )
       in
+      let sourcepost =
+        match is_reserved_stitch stitch, sourcepost with
+        | _    , PostSingle post               -> post
+        | true , PostDouble (_   , _, postres) -> postres
+        | false, PostDouble (post, _, _      ) -> post   
+      in 
       let query = 
         match order with
         | So -> raise (Crash (Printf.sprintf "so in knot %s" (string_of_knot knot)))
@@ -504,8 +743,36 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
       in
       check_taut (pos_of_stitch stitch) stringfun query
       ;
+      (* inheritance of location *)
+      (* this is a bit WRONG. Will work with variable locations, perhaps not with arrays *)
+      (match locopt_of_stitch stitch with
+       | Some (loc, _) -> 
+           (match sourcepost_of_stitch Elaboration stitch with
+            | PostSingle pre, _ ->
+                report (Error (stitch.stitchpos,
+                               Printf.sprintf "stitch has reservation %s, but source %s \
+                                               doesn't have a reserved postcondition"
+                                              (string_of_location loc)
+                                              blab
+                              )
+                       )
+            | PostDouble (_, ploc, _), _ 
+                when not (Location.eq ploc loc) ->
+                report (Error (stitch.stitchpos,
+                               Printf.sprintf "stitch has reservation %s, but source %s \
+                                               has postcondition reservation %s"
+                                              (string_of_location loc)
+                                              blab
+                                              (string_of_location ploc)
+                              )
+                       )
+            | _    -> () (* double, same loc *)
+           )
+       | None         -> () (* not a reserved stitch *)
+      )
+      ;
       (* external stability of stitch *)
-      List.iter (check_external_stability (pos_of_stitch stitch) bassert) rely;
+      List.iter (check_external_stability (pos_of_stitch stitch) (locopt_of_stitch stitch) bassert) rely;
       
       (* here goes with internal stability *)
       (* we have a constraint b->c. Find relevant so paths *)
@@ -569,7 +836,17 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
       in
       let interferes_before anode =
         if anode=bnode then OPSet.empty else
+          (* deal with the possibility that a is a store-conditional *)
           (let abset = OPGraph.paths anode bnode opgraph in
+           let alab = label_of_node anode in
+           let abset =
+             if is_control alab labmap then 
+               (* store-conditional is dangerous on its 't' path *)
+               (let assignstep = CEnode (alab, true) in
+                OPSet.filter (fun (_,_,nset) -> NodeSet.mem assignstep nset) abset
+               )
+             else abset
+           in
            if !verbose || !Settings.verbose_knots then
              Printf.printf "\nabset %s->%s = %s" (string_of_node anode) (string_of_node bnode)
                                                  (OPSet.to_string abset);
@@ -607,12 +884,12 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
                           (OPSet.to_string paths);
           lpk, paths
         in
-        let aintf = intf_of_triplet Internal at in
-        let screg = !Settings.param_SCreg && Assign.is_reg_assign (Intfdesc.assign aintf) in
+        let aintf = intf_of_triplet Elaboration at in
+        let screg = !Settings.param_SCreg && Com.is_reg_assign at in
         let interferes =
           [vcheck InsideLo (OPSet.filter (fun (_,_,nodeset) -> NodeSet.mem anode nodeset) 
-                                            bccset
-                              );
+                                         bccset
+                           );
            (if screg then 
               InsideLo, OPSet.empty
             else 
@@ -625,55 +902,59 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
            )
           ]
         in
-        (match Option.findfirst (not <.> OPSet.is_empty <.> sndof2) interferes with
-         | None                    -> ()
-         | Some (direction, opset) ->
-             (* we want the internal interference, unweakened for the guarantee *)
-             let reportpaths direction opset =
-               let singpre =
-                 Printf.sprintf "there is %s '%s' path"
-                                (match direction with
-                                 | InsideLo 
-                                 | AfterLo  -> "an"
-                                 | BeforeLo -> "a"
-                                )
-                                (string_of_loparkind direction)
-               in
-               let plurpre = 
-                 Printf.sprintf "there are %s paths" (string_of_loparkind direction) 
-               in
-               let pathlims =
-                 match direction with
-                 | InsideLo -> bnode, cnode
-                 | BeforeLo -> anode, bnode
-                 | AfterLo  -> cnode, anode
-               in
-               Listutils.prefixed_phrase_of_list 
-                 (string_of_path <.> uncurry2 completepath_of_opath pathlims)
-                 singpre
-                 plurpre
-                 (OPSet.elements opset)
-             in
-             let stringfun () =
-               Printf.sprintf "lo-parallel (internal) stability of %s against interference %s of command %s\
-                               \n   -- %s"
-                              (string_of_formula bassert)
-                              (string_of_intfdesc aintf)
-                              (string_of_label at.tripletlab.lablab)
-                              (reportpaths direction opset)
-             in
-             if NameSet.is_empty (NameSet.inter (Formula.frees bassert)
-                                                (Intfdesc.assigned aintf)
+        let check_lo aintf =
+          match Option.findfirst (not <.> OPSet.is_empty <.> sndof2) interferes with
+          | None                    -> ()
+          | Some (direction, opset) ->
+              (* we want the internal interference, unweakened for the guarantee *)
+              let reportpaths direction opset =
+                let singpre =
+                  Printf.sprintf "there is %s '%s' path"
+                                 (match direction with
+                                  | InsideLo 
+                                  | AfterLo  -> "an"
+                                  | BeforeLo -> "a"
                                  )
-             then
-               avoided (pos_of_stitch stitch) "Z3 check" stringfun
-             else
-               (let scq = 
-                  Stability.sc_stable_query_intfdesc bassert aintf 
+                                 (string_of_loparkind direction)
                 in
-                check_taut (pos_of_stitch stitch) stringfun scq
-               )
-        )
+                let plurpre = 
+                  Printf.sprintf "there are %s paths" (string_of_loparkind direction) 
+                in
+                let pathlims =
+                  match direction with
+                  | InsideLo -> bnode, cnode
+                  | BeforeLo -> anode, bnode
+                  | AfterLo  -> cnode, anode
+                in
+                Listutils.prefixed_phrase_of_list 
+                  (string_of_path <.> uncurry2 completepath_of_opath pathlims)
+                  singpre
+                  plurpre
+                  (OPSet.elements opset)
+              in
+              let stringfun () =
+                Printf.sprintf "lo-parallel (internal) stability of %s against interference %s of command %s\
+                                \n   -- %s"
+                               (string_of_formula bassert)
+                               (string_of_intfdesc aintf)
+                               (string_of_label at.tripletlab.lablab)
+                               (reportpaths direction opset)
+              in
+              if NameSet.is_empty (NameSet.inter (Formula.frees bassert)
+                                                 (Intfdesc.assigned aintf)
+                                  )
+              then
+                avoided (pos_of_stitch stitch) "Z3 check" stringfun
+              else
+                (let scq = 
+                   Stability.sc_stable_query_intfdesc bassert aintf 
+                 in
+                 check_taut (pos_of_stitch stitch) stringfun scq
+                )
+        in
+        match aintf with
+        | IntfSingle i        -> check_lo i
+        | IntfDouble (i,ires) -> check_lo i; check_lo ires
       in
       List.iter cassign assigns;
         
@@ -741,8 +1022,8 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
     let check (at,bt) =
       if at=bt then () else
       if !Settings.param_SCloc &&
-        (let aves = Assign.loces_of_assign (assign_of_triplet at) in
-         let bves = Assign.loces_of_assign (assign_of_triplet bt) in
+        (let aves = Assign.loces (assign_of_triplet at) in
+         let bves = Assign.loces (assign_of_triplet bt) in
          match aves, bves with
          | (av,_)::_, (bv,_)::_ -> av=bv
          | _                    -> false
@@ -754,33 +1035,44 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
          let abset = OPGraph.paths (Cnode alab) (Cnode blab) opgraph in
          let opset = so_butnot_constraint order_filter abset in
          if not (OPSet.is_empty opset) then
-           let aintf = intf_of_triplet External at in
-           let bintf = intf_of_triplet External bt in
-           let atassert = assertion_of_knot External at.tripletknot in
-           let stringfun () =
-             Printf.sprintf "%s-parallel (in-flight) stability of %s against interference %s of command %s\
-                             \n   -- there %s"
-                            constraint_string
-                            (string_of_formula atassert)
-                            (string_of_intfdesc bintf)
-                            (string_of_label blab)
-                            (Listutils.prefixed_phrase_of_list 
-                                  (string_of_path <.> 
-                                   completepath_of_opath (Cnode alab) (Cnode blab)
-                                  )
-                                  "is a path"
-                                  "are paths"
-                                  (OPSet.elements opset)
-                            )
+           let aintf = intf_of_triplet Interference at in
+           let bintf = intf_of_triplet Interference bt in
+           (* now that this has all doubled up, I could do with a Map here.
+              Wrong: check_taut is memoised, so we're ok.
+            *)
+           let check_buo aintf bintf =
+             let stringfun () =
+               Printf.sprintf "%s-parallel (in-flight) stability of %s against interference %s of command %s\
+                               \n   -- there %s"
+                              constraint_string
+                              (string_of_intfdesc aintf)
+                              (string_of_intfdesc bintf)
+                              (string_of_label blab)
+                              (Listutils.prefixed_phrase_of_list 
+                                    (string_of_path <.> 
+                                     completepath_of_opath (Cnode alab) (Cnode blab)
+                                    )
+                                    "is a path"
+                                    "are paths"
+                                    (OPSet.elements opset)
+                              )
+             in
+             let assigned = Intfdesc.assigned bintf in
+             let apre = bindExists (Intfdesc.binders aintf) (Intfdesc.pre aintf) in
+             let frees = Formula.frees apre in
+             if not needed || NameSet.is_empty (NameSet.inter assigned frees) then
+               avoided at.tripletknot.knotloc "check of" stringfun
+             else
+               (let boq = constraint_stab aintf.irec bintf.irec in
+                check_taut at.tripletknot.knotloc stringfun boq
+               )
            in
-           let assigned = Intfdesc.assigned bintf in
-           let frees = Formula.frees atassert in
-           if not needed || NameSet.is_empty (NameSet.inter assigned frees) then
-             avoided at.tripletknot.knotloc "check of" stringfun
-           else
-             (let boq = constraint_stab aintf.irec bintf.irec in
-              check_taut at.tripletknot.knotloc stringfun boq
-             )
+           match aintf, bintf with
+           | IntfSingle ai        , IntfSingle bi         -> check_buo ai bi
+           | IntfSingle ai        , IntfDouble (bi,bires) -> check_buo ai bi; check_buo ai bires
+           | IntfDouble (ai,aires), IntfSingle bi         -> check_buo ai bi; check_buo aires bi
+           | IntfDouble (ai,aires), IntfDouble (bi,bires) -> check_buo ai bi; check_buo ai bires;
+                                                             check_buo aires bi; check_buo aires bires
         )
     in
     if List.mem triplet vassigns then
@@ -802,7 +1094,7 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
   in
   match thread.t_body with
   | Threadfinal f ->  
-      List.iter (check_external_stability f.fpos f) rely
+      List.iter (check_external_stability f.fpos None f) rely
   | Threadseq []  -> ()
   | Threadseq seq -> 
       (* If we have a given rely, we check it for bo stability. This is somewhat too 
@@ -855,20 +1147,21 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
         match ct.tripletof.sc_node with
         | Skip     -> ()
         | Assert f -> 
-            let apre = assertion_of_knot External ct.tripletknot in
-            let query = _recImplies apre f in
-            let stringfun () =
-              Printf.sprintf "inheritance of assertion %s \
-                              from precondition %s"
-                              (string_of_formula f)
-                              (string_of_formula apre)
+            let check_assert pre =
+              let query = _recImplies pre f in
+              let stringfun () =
+                Printf.sprintf "inheritance of assertion %s \
+                                from precondition %s"
+                                (string_of_formula f)
+                                (string_of_formula pre)
+              in
+              check_taut ct.tripletpos stringfun query
             in
-            check_taut ct.tripletpos stringfun query
-            
+            pre_iter check_assert (fun _ -> ()) (precondition_of_knot Interference ct.tripletknot)
         | Assign a
           when Assign.is_var_assign a ->
             (* uniqueness of write *)
-            let loces = Assign.loces_of_assign a in
+            let loces = Assign.loces a in
             (*
                if not !Settings.param_SCloc && List.length loces>1 then
                  report (Error (ct.tripletpos,
@@ -881,60 +1174,79 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
                 (let rhs = 
                    _recSofar Here Now (_recNotEqual (Location._recFloc loc) e) (* fun if it's an array ... *)
                  in
-                 let query = _recImplies (assertion_of_knot External ct.tripletknot) rhs in
-                 let stringfun () = 
-                   Printf.sprintf "uniqueness of write to %s (precondition doesn't imply %s)"
-                                  (Location.string_of_location loc)
-                                  (string_of_formula rhs)
+                 let check_unique pre = 
+                   let query = _recImplies pre rhs in
+                   let stringfun () = 
+                     Printf.sprintf "uniqueness of write to %s (precondition doesn't imply %s)"
+                                    (Location.string_of_location loc)
+                                    (string_of_formula rhs)
+                   in
+                   check_taut ct.tripletpos stringfun query
                  in
-                 check_taut ct.tripletpos stringfun query
+                 pre_iter check_unique (fun _ -> ()) (precondition_of_knot Elaboration ct.tripletknot) 
                 )
               else ()
             in
             List.iter unique_ve loces;
-            (* assertion precondition implies interference precondition *)
+            (* elaboration precondition implies interference precondition *)
             (match ct.tripletof.sc_ipreopt with
              | None      -> ()
              | Some ipre ->
-                let apre = assertion_of_knot External ct.tripletknot in
-                let query = _recImplies apre ipre in
-                let stringfun () = 
-                  Printf.sprintf "inheritance of interference precondition %s \
-                                  from assignment precondition %s" 
-                         (string_of_formula ipre)
-                         (string_of_formula apre)
+                let epre = precondition_of_knot Interference ct.tripletknot in
+                let cii epre ipre =
+                  let query = _recImplies epre ipre in
+                  let stringfun () = 
+                    Printf.sprintf "inheritance of interference precondition %s \
+                                    from assignment precondition %s" 
+                           (string_of_formula ipre)
+                           (string_of_formula epre)
+                  in
+                  check_taut ct.tripletpos stringfun query
                 in
-                check_taut ct.tripletpos stringfun query
+                match epre, ipre with
+                | PreSingle e           , IpreSimple i      -> cii e i
+                | PreDouble (e, loc, er), IpreSimple i      -> cii e i
+                | PreDouble (e, loc, er), IpreRes    ir     -> cii er ir
+                | PreDouble (e, loc, er), IpreDouble (i,ir) -> cii e i; cii er ir
+                (* and then arity problem *)
+                | _                                         -> 
+                    report (Error (ct.tripletpos, "knot has reserved interference precondition, \
+                                                   but doesn't have reserved constraint(s)."
+                                  )
+                           )
             );
             (* internal bo/uo parallelism *)
             check_boparallel true vassigns ct;
-            let cintf = intf_of_triplet Internal ct in
-            let cpre = cintf.irec.i_pre in
-            let needs_uo = 
-              Formula.exists is_recU cpre &&
-              not (NameSet.is_empty (NameSet.inter (Intfdesc.assigned cintf) (Formula.frees cpre)))
+            let check_uo cintf = 
+              let cpre = cintf.irec.i_pre in
+              let needs_uo = 
+                Formula.exists is_recU cpre &&
+                not (NameSet.is_empty (NameSet.inter (Assign.assigned a) (Formula.frees cpre)))
+              in
+              check_uoparallel needs_uo vassigns ct; (* if repeated, memoisation will save us *)
+              (* self-uo stability *)
+              let stringfun () = 
+                Printf.sprintf "self-uo stability of %s" (Intfdesc.string_of_intfdesc cintf) 
+              in
+              if not (needs_uo) then
+                avoided ct.tripletpos "check of" stringfun
+              else
+                (let cirec = cintf.irec in
+                 let query = Stability.uo_stable_internal_irecs cirec cirec in
+                 check_taut ct.tripletpos stringfun query;
+                )
             in
-            check_uoparallel needs_uo vassigns ct;
-            (* self-uo stability *)
-            let stringfun () = 
-              Printf.sprintf "self-uo stability of %s" (Intfdesc.string_of_intfdesc cintf) 
-            in
-            if not (needs_uo) then
-              avoided ct.tripletpos "check of" stringfun
-            else
-              (let cirec = cintf.irec in
-               let query = Stability.uo_stable_internal_irecs cirec cirec in
-               check_taut ct.tripletpos stringfun query;
-              )
+            intf_iter check_uo (intf_of_triplet Elaboration ct)
             ;
             (* inclusion in guarantee *)
-            check_intf_included "guarantee" (intf_of_triplet External ct) thread.t_guar
+            intf_iter (fun i -> check_intf_included "guarantee" i thread.t_guar)
+                      (intf_of_triplet Interference ct)
       | Assign _ -> ()
     in
-    let check_ctriplet () ft =
-      check_knot_of_triplet rely assigns string_of_condition ft
+    let check_ftriplet () ft =
+      check_knot_of_triplet rely assigns string_of_formula ft
     in
-    List.iter (Com.tripletfold check_comtriplet check_ctriplet ()) seq;
+    List.iter (Com.tripletfold check_comtriplet check_ftriplet ()) seq;
     match thread.t_postopt with
     | Some knot -> check_knot "" rely assigns None knot
     | None      -> ()
@@ -970,7 +1282,7 @@ let checkproof_prog {p_preopt=preopt; p_givopt=givopt; p_ts=threads; p_postopt=p
       | Some g -> Modality.get_coherence_vars NameSet.empty vset g
       | None   -> vset
     in
-    let vset = List.fold_left (Thread.assertion_fold Modality.get_coherence_vars) vset threads in
+    let vset = List.fold_left (Thread.assertionfold Modality.get_coherence_vars) vset threads in
     Coherence.coherence_variables := vset;
     if not (NameSet.is_empty vset) && not (!Settings.param_SCloc) then
       report (Error (dummy_spos,
@@ -1055,7 +1367,7 @@ let checkproof_prog {p_preopt=preopt; p_givopt=givopt; p_ts=threads; p_postopt=p
            in
            let tpost = function
              | i, {t_body=Threadfinal tpost} -> wrap i tpost
-             | i, {t_postopt=Some knot}      -> wrap i (assertion_of_knot External knot)
+             | i, {t_postopt=Some knot}      -> wrap i (unres_precondition_of_knot Elaboration knot)
              | _                             -> _recTrue
            in
            let tposts = conjoin (List.map tpost (numbered threads)) in

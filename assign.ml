@@ -25,7 +25,7 @@ type synchro =
 let string_of_synchro = function
   | LoadLogical      -> ":=*"
   | StoreConditional -> "*:="
-  | LocalAssign      -> ":= *"
+  | LocalAssign      -> ":="
 
 let string_of_assign a =
   let soa synchro lhs rhs = Printf.sprintf "%s %s %s" lhs (string_of_synchro synchro) rhs in
@@ -59,11 +59,10 @@ let string_of_assign a =
       )
 
 let is_aux_assign = function 
-  | RbecomesE  (r,_)                       -> Name.is_auxreg r 
-  | LocbecomesEs (_,(VarLoc v,_)::_)       -> Name.is_auxvar v
-  | LocbecomesEs (_,(ArrayLoc (v,_),_)::_) -> Name.is_auxvar v
-  | RsbecomeLocs (_,((r::_),_)::_)         -> Name.is_auxreg r
-  | a                                      -> raise (Invalid_argument ("Assign.is_aux_assign " ^ string_of_assign a))
+  | RbecomesE  (r,_)               -> Name.is_auxreg r 
+  | LocbecomesEs (_,(loc,_)::_)    -> Location.is_auxloc loc
+  | RsbecomeLocs (_,((r::_),_)::_) -> Name.is_auxreg r
+  | a                              -> raise (Invalid_argument ("Assign.is_aux_assign " ^ string_of_assign a))
   
 let is_var_assign = function 
   | LocbecomesEs _ -> true
@@ -74,10 +73,22 @@ let is_reg_assign = function
   | RsbecomeLocs _ -> true
   | LocbecomesEs _ -> false
   
-let loces_of_assign = function
-  | LocbecomesEs (b,loces) -> loces
-  | assign                 -> raise (Invalid_argument ("Assign.loces_of_assign " ^ string_of_assign assign))
+let is_loadlogical = function
+  | RsbecomeLocs (b,_) -> b
+  | _                  -> false
+  
+let is_storeconditional = function
+  | LocbecomesEs (b,_) -> b
+  | _                  -> false
 
+let reserved = function
+  | LocbecomesEs (true, ((loc,e)::_)) -> loc
+  | RsbecomeLocs (true, ((_,loc)::_)) -> loc
+  | a                                 -> raise (Invalid_argument ("Assign.reserved " ^ string_of_assign a))
+      
+let loces = function
+  | LocbecomesEs (b,loces) -> loces
+  | assign                 -> raise (Invalid_argument ("Assign.loces " ^ string_of_assign assign))
 
 let frees assign = 
   let loc_frees = function
@@ -153,8 +164,8 @@ let substitute mapping = function (* does locs as well *)
                    ) 
   | a                    -> a
 
-let optstriploc = optmap (fun ff a -> None) Formula.optstriploc
+let optstripspos = optmap (fun ff a -> None) Formula.optstripspos
 
-let striploc = optstriploc ||~ id
+let stripspos = optstripspos ||~ id
 
-let eq a1 a2 = striploc a1 = striploc a2
+let eq a1 a2 = stripspos a1 = stripspos a2

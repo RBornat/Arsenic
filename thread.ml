@@ -1,3 +1,4 @@
+open Function
 open Option
 open Sourcepos
 open Intfdesc
@@ -65,17 +66,18 @@ let threadseq {t_body=body} =
   | Threadseq seq -> seq
   | _             -> []
   
-let assertion_fold af v thread =
+(* **************************** folds for thread **************************** *)
+
+let assertionfold af v thread =
   let nobinders = Name.NameSet.empty in
   let kf v =
-    Knot.fold (fun v stitch -> af nobinders v (Stitch.assertion_of_stitch Order.External stitch)) 
-              v 
+    Knot.fold (fun v -> af nobinders v <.> Stitch.assertion_of_stitch) v 
   in
   let intff v intfdesc = af (Intfdesc.binders intfdesc) v (Intfdesc.pre intfdesc) in
   let v = List.fold_left intff v thread.t_guar in
   let v = 
     match thread.t_body with
-    | Threadseq seq -> List.fold_left (Com.knotfold kf) v (threadseq thread) 
+    | Threadseq seq -> List.fold_left (Com.knotfold kf) v seq 
     | Threadfinal f -> af nobinders v f
   in
   let v = 
@@ -86,6 +88,16 @@ let assertion_fold af v thread =
   match thread.t_relyopt with
   | Some intfs -> List.fold_left intff v intfs
   | None       -> v
+
+let knotfold kf v thread =
+  match thread.t_body with
+  | Threadseq seq -> List.fold_left (Com.knotfold kf) v seq 
+  | Threadfinal f -> v
+
+let tripletfold fcom ff v thread =
+  match thread.t_body with
+  | Threadseq seq -> List.fold_left (Com.tripletfold fcom ff) v seq 
+  | Threadfinal f -> v
 
 (* let substitute mapping thread =
   let doit = Formula.subst mapping in

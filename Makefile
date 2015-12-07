@@ -15,6 +15,13 @@ Test : *.ml *.mly *.mll
 
 newz3 : 
 	cd z3; git clone https://git.codeplex.com/forks/jjb/z3
+	make compilez3
+	
+pullz3 : 
+	cd z3; git pull https://git.codeplex.com/forks/jjb/z3
+	make compilez3
+
+compilez3 :
 	cd z3; rm -fr build; ./configure $(Z3CONFIG)
 	cd z3/build; make -j4
 	cd z3/build; sudo make install PREFIX=/usr

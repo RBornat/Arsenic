@@ -30,3 +30,7 @@ let revargs2 f a b = f b a
 let isAny fs v = List.exists (fun f -> f v) fs
 
 let isAll fs v = List.for_all (fun f -> f v) fs
+
+let (<&&>) f g x = f x && g x
+
+let (<||>) f g x = f x || g x

@@ -70,18 +70,21 @@ let pushparent p parents = (List.length parents+1,p)::parents
 let rec labmaps_com parents map = function
   | Com       ct -> addnewlabel ct.tripletlab (CidSimplecom ct) parents map
   | Structcom sc ->
-      (match sc.structcomnode with
-       | DoUntil (seq,ft) ->
+      (let add_c c parents = 
+         addnewlabel (poslab_of_condition c) (CidControl c) (pushparent ControlPos parents)
+       in
+       match sc.structcomnode with
+       | DoUntil (seq,c) ->
            let parents = pushparent (DoUntilPos sc.structcompos) parents in
            let map = labmaps_seq parents map seq in
-           addnewlabel ft.tripletlab (CidControl ft) (pushparent ControlPos parents) map
-       | While (ft,seq) -> 
+           add_c c parents map
+       | While (c,seq) -> 
            let parents = pushparent (WhilePos sc.structcompos) parents in
-           let map = addnewlabel ft.tripletlab (CidControl ft) (pushparent ControlPos parents) map in
+           let map = add_c c parents map in
            labmaps_seq parents map seq
-       | If (ft,sthen,selse) ->
+       | If (c,sthen,selse) ->
            let parents = pushparent (IfPos sc.structcompos) parents in
-           let map = addnewlabel ft.tripletlab (CidControl ft) (pushparent ControlPos parents) map in
+           let map = add_c c parents map in
            let map = labmaps_seq (pushparent (IfArmPos true) parents) map sthen in
            labmaps_seq (pushparent (IfArmPos false) parents) map selse
       )
@@ -243,23 +246,28 @@ let rec graph_seqel prgr com =
 and graph_seq prgr = List.fold_left graph_seqel prgr
 
 and graph_structcom (prevnodes, opgraph) sc = 
+  let graph_c pair c =
+    match c with
+    | CExpr   ft -> graph_triplet pair ft
+    | CAssign ct -> graph_triplet pair ct
+  in
   match sc.structcomnode with
-  | If (ft, s1, s2) -> 
-      let _, opgraph = graph_triplet (prevnodes,opgraph) ft in
-      let ftlab = lab_of_triplet ft in
-      let s1prevs, opgraph = graph_seq ([CEnode (ftlab,true)],opgraph) s1 in
-      let s2prevs, opgraph = graph_seq ([CEnode (ftlab,false)],opgraph) s2 in
+  | If (c, s1, s2) -> 
+      let _, opgraph = graph_c (prevnodes,opgraph) c in
+      let clab = lab_of_condition c in
+      let s1prevs, opgraph = graph_seq ([CEnode (clab,true)],opgraph) s1 in
+      let s2prevs, opgraph = graph_seq ([CEnode (clab,false)],opgraph) s2 in
       s1prevs@s2prevs, opgraph
-  | While (ft, s) ->
-      let _, opgraph = graph_triplet (prevnodes,opgraph) ft in
-      let ftlab = lab_of_triplet ft in
-      let s_prevs, opgraph = graph_seq ([CEnode (ftlab,true)],opgraph) s in
-      [CEnode (ftlab,false)], add_cyso ftlab (s_prevs,opgraph) (* loopback *)
-  | DoUntil (s, ft) ->
+  | While (c, s) ->
+      let _, opgraph = graph_c (prevnodes,opgraph) c in
+      let clab = lab_of_condition c in
+      let s_prevs, opgraph = graph_seq ([CEnode (clab,true)],opgraph) s in
+      [CEnode (clab,false)], add_cyso clab (s_prevs,opgraph) (* loopback *)
+  | DoUntil (s, c) ->
       let s_prevs, opgraph = graph_seq (prevnodes,opgraph) s in
-      let ftlab = lab_of_triplet ft in
-      let _, opgraph = graph_triplet (s_prevs,opgraph) ft in
-      [CEnode (ftlab,true)], add_cyso (fstlab_structcom sc) ([CEnode (ftlab,false)],opgraph) (* loopback *)
+      let clab = lab_of_condition c in
+      let _, opgraph = graph_c (s_prevs,opgraph) c in
+      [CEnode (clab,true)], add_cyso (fstlab_structcom sc) ([CEnode (clab,false)],opgraph) (* loopback *)
 
 let graph_thread preopt postopt thread =
   let opgraph = OPGraph.empty in
@@ -411,6 +419,7 @@ let check_constraints_thread preopt postopt labmap opgraph thread =
   let check_constraints_stitch poslab stitch =
     let source = source_of_stitch stitch in
     let target = Cnode poslab.lablab in
+    (* stitches must reinforce so *)
     if OPSet.is_empty (so_opaths (OPGraph.paths source target opgraph)) then
       report 
         (Error 
@@ -424,37 +433,73 @@ let check_constraints_thread preopt postopt labmap opgraph thread =
            )
         )
     ;
-    match order_of_stitch stitch with
-    | Go ->
-        if not (is_CEnode source) then
-          report 
-            (Error 
-               (pos_of_stitch stitch, string_of_order Go ^ " constraint source must be \
-                                      the control expression of a conditional or a loop"
-               )
-            );
-        (match get_cid poslab.lablab labmap with
-         | CidSimplecom ct 
-           when Com.is_var_assign ct -> ()
-         | _                         ->
-             report 
-               (Error (* is it? I think so *)
-                  (pos_of_stitch stitch, string_of_order Go ^ " constraint target must be \
-                                         a variable assignment"
-                  )
-               )
-        ) 
-    | _  -> ()
+    
+    (* ****** target stuff ******* *)
+
+    let target_cid = get_cid poslab.lablab labmap in
+    let badtarget skind s =
+      report (Error (pos_of_stitch stitch, Printf.sprintf "%s targets %s" skind s))
+    in
+
+    (* go stitches must target variable assignment *)
+    (match order_of_stitch stitch, target_cid with
+     | Go, CidSimplecom ct 
+       when Com.is_var_assign ct -> ()
+     | Go, _                     -> badtarget (Order.string_of_order Go ^ " constraint")
+                                              "component which is not variable assignment"
+     | _  -> ()
+    );
+    (* load-logical can't have a reservation stitch *)
+    (match target_cid, locopt_of_stitch stitch with
+     | CidSimplecom ct, Some _ 
+         when Com.is_loadlogical ct  ->
+           badtarget "reservation stitch" "load-logical"
+     | _                             -> ()
+    );
+    (* reservation stitch may not target load-logical or thread post *)
+    (match is_reserved_stitch stitch, target_cid with
+     | true, CidSimplecom ct 
+        when Com.is_loadlogical ct -> badtarget "reservation stitch" "load-logical"
+     | true, CidThreadPost _       -> badtarget "reservation stitch" "thread postcondition"
+     | _                           -> ()
+    );
+
+    (* ****** source stuff ******* *)
+    
+    let source_cid = get_cid (label_of_node source) labmap in
+    let badsource kind s = 
+      report (Error (pos_of_stitch stitch, Printf.sprintf "%s sources %s" kind s))
+    in
+
+    (* source may not be final state or thread postcondition *)
+    (match source_cid with
+     | CidFinal      _ -> badsource "stitch" "final state"
+     | CidThreadPost _ -> badsource "stitch" "thread postcondition"
+     | _               -> ()
+    );
+    (* reservation stitches may not source a store-conditional or initial state. *)
+    (match is_reserved_stitch stitch, source_cid with
+     | true, CidControl c -> (match c with
+                              | CExpr   ft -> ()
+                              | CAssign _  -> badsource "reservation stitch" "store-conditional"
+                             )
+     | true, CidInit _    -> badsource "reservation stitch" "initial state"
+     | _                  -> () 
+    )
   in
-  let rec check_constraints_knot poslab pc =
-    match pc.knotnode with
-    | SimpleKnot stitches  -> 
-        (* check all are in so *)
-        List.iter (check_constraints_stitch poslab) stitches
-    | KnotOr    (pc1,pc2) 
-    | KnotAnd   (pc1,pc2) 
-    | KnotAlt   (pc1,pc2) -> check_constraints_knot poslab pc1;
-                             check_constraints_knot poslab pc2
+  let check_constraints_knot poslab knot =
+    (* check the stitches *)
+    Knot.iter (check_constraints_stitch poslab) knot;
+    (* check reservations *)
+    let ress = Knot.reservations knot in
+    let resn = List.length ress in
+    if resn>1 then
+      report (Error (knot.knotloc,
+                     Printf.sprintf "knot appeals to reservations for %s locations -- %s"
+                                    (if resn=2 then "two" else "several")
+                                    (Listutils.standard_phrase_of_list Location.string_of_location (List.rev ress))
+                    )
+             )
   in
   let knot_coverage origin all_paths_to knot =
     let rec fka knot =
@@ -468,10 +513,10 @@ let check_constraints_thread preopt postopt labmap opgraph thread =
           List.fold_left OPSet.inter all_paths_to (List.map stitch_covers stitches)
       | KnotOr    (pc1,pc2) -> OPSet.union (fka pc1) (fka pc2)
       | KnotAnd   (pc1,pc2) -> OPSet.inter (fka pc1) (fka pc2)
-      | KnotAlt   (pc1,pc2) -> raise (Crash "Lace.knot_coverage sees KnotAlt")
+      | KnotAlt   (pc1,pc2) -> raise (Invalid_argument "Lace.knot_coverage sees KnotAlt")
+    in
+    fka knot
   in
-  fka knot
-in
   let check_constraints_triplet knotmap {tripletknot=knot; tripletlab=poslab} =
     check_constraints_knot poslab knot;
     let source = initnode in
@@ -552,7 +597,7 @@ in
                List.fold_left common_ancestors (List.hd ps) (List.tl ps)
            | KnotOr  (k1,k2)
            | KnotAnd (k1,k2) -> common_ancestors (cas_knot k1) (cas_knot k2)
-           | KnotAlt (k1,k2) -> raise (Crash "Lace.cas_knot sees KnotAlt")
+           | KnotAlt (k1,k2) -> raise (Invalid_argument "Lace.cas_knot sees KnotAlt")
          in
          let k1ps = cas_knot k1 in
          let k2ps = cas_knot k2 in
@@ -590,38 +635,22 @@ in
     | _               -> check_full_coverage knot;
                          knotmap
   in
-  
-  let rec check_constraints_structcom knotmap sc =
-    match sc.structcomnode with
-    | If (ft,s1,s2) -> 
-        List.fold_left check_constraints_seq
-                       (check_constraints_triplet knotmap ft)
-                       [s1; s2]
-    | While (ft,s) ->
-        check_constraints_seq (check_constraints_triplet knotmap ft)
-                            s
-    | DoUntil (s,ft) -> 
-        check_constraints_triplet (check_constraints_seq knotmap s)
-                                ft
-  
-  and check_constraints_seqel knotmap com =
-    match com with
-    | Com triplet  -> check_constraints_triplet knotmap triplet
-    | Structcom sc -> check_constraints_structcom knotmap sc
-  
-  and check_constraints_seq knotmap seq =
-    List.fold_left check_constraints_seqel knotmap seq
+  let check_constraints_simplecomtriplet knotmap ct =
+    (* check the arity of the ipre option *)
+    (match ct.tripletof.sc_ipreopt, precondition_of_knot Interference ct.tripletknot with
+     | Some (IpreDouble _), PreSingle _ 
+     | Some (IpreRes    _), PreSingle _ -> 
+         report (Error (ct.tripletpos, "knot and command cannot generate reservation-interference precondition"))
+     | _                                -> ()
+    );
+    check_constraints_triplet knotmap ct
   in
+  Thread.tripletfold check_constraints_simplecomtriplet check_constraints_triplet KnotMap.empty thread
   
-  match thread.t_body with 
-  | Threadfinal _ -> KnotMap.empty (* nothing interesting at all *)
-  | Threadseq seq -> 
-      check_constraints_seq KnotMap.empty seq
-
-  (* because of the peculiarities of KnotAlt, delivers a KnotMap *)
-  let check_constraints_prog {p_preopt=preopt; p_givopt=givopt; p_ts=threads; p_postopt=postopt} labmaps opgraphs =
-    List.map (uncurry2 (uncurry2 (check_constraints_thread preopt postopt)))
-              (List.combine (List.combine labmaps opgraphs) threads)
+(* because of the peculiarities of KnotAlt, delivers a KnotMap *)
+let check_constraints_prog {p_preopt=preopt; p_givopt=givopt; p_ts=threads; p_postopt=postopt} labmaps opgraphs =
+  List.map (uncurry2 (uncurry2 (check_constraints_thread preopt postopt)))
+            (List.combine (List.combine labmaps opgraphs) threads)
 
 (* *********************** no universalised temporal coincidences **************************** *)
 
@@ -665,7 +694,7 @@ let check_coincidence_formula binders =
   ccf binders None
 
 let check_coincidence_thread thread =
-  Thread.assertion_fold (fun binders () -> check_coincidence_formula binders)
+  Thread.assertionfold (fun binders () -> check_coincidence_formula binders)
                         ()
                         thread
                         

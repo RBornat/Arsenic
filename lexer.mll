@@ -76,7 +76,6 @@ rule make_token = parse
   | "then"      {THEN}
   | "else"      {ELSE}
   | "fi"        {FI}
-  | "assume"    {ASSUME}
   | "skip"      {SKIP}
   | "assert"    {ASSERT}
   
@@ -135,9 +134,9 @@ rule make_token = parse
   | "sofar"     {SOFAR}
   | "_S"        {SOFAR}
   | "fandw"     {FANDW}
-  | "sitf"      {SITF}
   | "_c"        {COHERE}
   | "_cv"       {COHEREVAR}
+  | "latest"    {LATEST}
   
   | "guarantee" {GUARANTEE}
   | "guar"      {GUARANTEE}

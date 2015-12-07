@@ -67,86 +67,23 @@ let optmap f_intf f_formula intfdesc =
 
 let map f_intf f_formula = anyway (optmap f_intf f_formula)
 
-let rec optstriploc intfdesc =
+let rec optstripspos intfdesc =
   optmap 
     (function  | {ipos=spos} when spos=dummy_spos -> None
-               | intfdesc                     -> Some (striploc {intfdesc with ipos=dummy_spos}))
-    Formula.optstriploc 
+               | intfdesc                     -> Some (stripspos {intfdesc with ipos=dummy_spos}))
+    Formula.optstripspos 
     intfdesc
     
-and striploc intfdesc = (optstriploc ||~ id) intfdesc
+and stripspos intfdesc = (optstripspos ||~ id) intfdesc
   
-let eq i1 i2 = striploc i1 = striploc i2
+let eq i1 i2 = stripspos i1 = stripspos i2
 
 let sameinterferences i1s i2s =
-  let striploc_and_sort = List.sort Pervasives.compare <.> List.map striploc in
+  let striploc_and_sort = List.sort Pervasives.compare <.> List.map stripspos in
   try 
     List.for_all (uncurry2 (=)) 
                  (List.combine (striploc_and_sort i1s) (striploc_and_sort i2s))
   with Invalid_argument _ -> false
-
-(*
-(* *********************** intfdesc sets and maps ******************************* *)
-
-(* ************** sets of intfdesc: only safe when striploc'd; ************
-   ************** use addintdesc not IntfdescSet.add;          ************
-   ************** use memintfdesc not IntfdescSet.mem          ************ *)
-
-module IntfdescSet = Set.Make (struct type t = intfdesc let compare = Pervasives.compare end)
-
-let addintdesc = IntfdescSet.add <.> striploc
-let memintfdesc = IntfdescSet.mem <.> striploc
-
-module IntfdescMap = Map.Make (struct type t = intfdesc let compare = Pervasives.compare end)
-
-let addintfdesc  (intfdesc:intfdesc) = IntfdescMap.add (striploc intfdesc)
-let findintfdesc (intfdesc:intfdesc) = IntfdescMap.find (striploc intfdesc)
-
-module StringMap = Map.Make (struct type t = string let compare = Pervasives.compare end)
-
-let internals = (ref []: intfdesc list ref)
-
-let thread_intf_name_map = (ref IntfdescMap.empty : string IntfdescMap.t ref)
-let thread_name_intf_map = (ref StringMap.empty : intfdesc StringMap.t ref)
-
-let set_tintfs gs locals = 
-  let addentry (inmap,nimap) intfdesc =
-    match intfdesc.irec with
-    | { i_labelopt = Some label } -> addintfdesc intfdesc label inmap,
-                                     StringMap.add label intfdesc nimap
-    | _                           -> inmap,nimap
-  in
-  let inmap, nimap = List.fold_left addentry (IntfdescMap.empty,StringMap.empty) gs in
-  let inmap, nimap = List.fold_left addentry (inmap,nimap) locals in
-  thread_intf_name_map := inmap;
-  thread_name_intf_map := nimap;
-  internals := locals
-  
-let reset_tintfs () = thread_intf_name_map := IntfdescMap.empty
-
-let lookup_intf intfdesc =
-  match intfdesc.irec with
-  | InterferenceRef name -> (try StringMap.find name !thread_name_intf_map 
-                             with Not_found -> intfdesc
-                            )
-  | _                    -> intfdesc
-  
-(* try to print intfdesc names -- but only if we've shown the relies, or we're not making the relies *)
-
-let string_of_interference_label intfdesc =
-  try findintfdesc intfdesc !thread_intf_name_map with Not_found -> string_of_intfdesc intfdesc
-
-let string_of_intfdesc = 
-  if not(Settings.makerelies()) || Settings.showrelies() then 
-    string_of_interference_label 
-  else 
-    (string_of_intfdesc <.> lookup_intf)
-
-let string_of_intfdescs = string_of_list string_of_intfdesc "; "
-
-let badcall s intfdesc = 
-  raise (Invalid_argument ("Intfdesc." ^ s ^ " " ^ string_of_intfdesc intfdesc))
-*)
 
 let irec intfdesc = intfdesc.irec
 
@@ -158,7 +95,7 @@ let assigned = Assign.assigned <.> assign
   
 let loces intfdesc =  
   let i = intfdesc.irec in
-  Assign.loces_of_assign (i.i_assign)
+  Assign.loces (i.i_assign)
 
 let assigned_vars intfdesc = 
   let locs, _ = List.split (loces intfdesc) in

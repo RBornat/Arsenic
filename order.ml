@@ -3,7 +3,7 @@ open Name
 open Formula
 
 (* This file is part of Arsenic, a proofchecker for New Lace logic.
-    Copyright (c) 2015 Richard Bornat.
+   Copyright (c) 2015 Richard Bornat.
    Licensed under the MIT license (sic): see LICENCE.txt or
    https://opensource.org/licenses/MIT
  *)
@@ -28,17 +28,23 @@ let combine o1 o2 =
   | _ , Bo | Bo , _ -> Bo
   | _               -> Lo
   
-type ikind = Internal | External
+let is_go = function
+  | Go -> true
+  | _  -> false
+  
+(*
+    type ikind = Internal | External
 
-let string_of_ikind = function
-  | Internal -> "Internal"
-  | External -> "External"
+    let string_of_ikind = function
+      | Internal -> "Internal"
+      | External -> "External"
 
-let quotient order ikind assertion =
-  match order, ikind, !Settings.param_LocalSpec with
-  (* | Go, _       , false -> _recTrue *)
-  | Go, Internal, _    -> 
-      let frees = Formula.frees assertion in
-      let binders = NameSet.filter (not <.> Name.is_logc) frees in
-      bindExists binders assertion
-  | _ -> assertion
+    let quotient order ikind assertion =
+      match order, ikind, !Settings.param_LocalSpec with
+      (* | Go, _       , false -> _recTrue *)
+      | Go, Internal, _    -> 
+          let frees = Formula.frees assertion in
+          let binders = NameSet.filter (not <.> Name.is_logc) frees in
+          bindExists binders assertion
+      | _ -> assertion
+*)

@@ -39,7 +39,7 @@ let ext_stable_checks with_scloc assertion irec =
                                              let arraysel = _recArraySel v ixf in
                                              _recEqual arraysel (hatted false arraysel)
                )
-               (fstof2 (List.split (Assign.loces_of_assign instance.i_assign)))
+               (fstof2 (List.split (Assign.loces instance.i_assign)))
     else []
   in
   let hatted_pre = hatted false instance.i_pre in
@@ -58,7 +58,7 @@ let bo_stable_query_intfdesc assertion intfdesc =
   bo_stable_query assertion (Intfdesc.irec intfdesc)
 
 let bo_stable_query_irecs intf1 intf2 =
-  bo_stable_query intf1.i_pre intf2
+  bo_stable_query (bindExists intf1.i_binders intf1.i_pre) intf2
               
 let ext_stable_queries = ext_stable_checks true
 
@@ -86,5 +86,5 @@ let uo_stable_internal assertion irec =
 let uo_stable_internal_intfdesc assertion intfdesc =
   uo_stable_internal assertion (Intfdesc.irec intfdesc)
   
-let uo_stable_internal_irecs i1 i2 =
-  uo_stable_internal i1.i_pre i2
+let uo_stable_internal_irecs irec1 irec2 =
+  uo_stable_internal (bindExists irec1.i_binders irec1.i_pre) irec2

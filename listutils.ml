@@ -57,17 +57,19 @@ let mappedby = List.mem_assoc
 let (<@>) xys x = List.assoc x xys
 let (<@@>) xys x = List.assq x xys
 
-let memofun newf =
-  let table = ref [] in
-  let lookup x =
-    try (!table)<@>x
-    with Not_found ->
-      (let y = newf x in
-       table := (x,y)::!table;
-       y
-      )
-  in
-  lookup
+(* don't use this: Maps are easier
+   let memofun newf =
+     let table = ref [] in
+     let lookup x =
+       try (!table)<@>x
+       with Not_found ->
+         (let y = newf x in
+          table := (x,y)::!table;
+          y
+         )
+     in
+     lookup
+ *)
 
 let rec ncombine xss = 
   let bad () =

@@ -24,6 +24,7 @@ and formulanode =
   | Fbool        of bool
   | Freg         of reg
   | Fvar         of timecone * epoch * var
+  | Latest       of timecone * epoch * var
   | Flogc        of logc
   | Negarith     of formula
   | Arith        of formula * arithop * formula
@@ -39,10 +40,10 @@ and formulanode =
   | Since        of timecone * epoch * formula * formula        
   | Bfr          of timecone * epoch * formula                  
   | Univ         of epoch * formula 
-  | Sofar        of timecone * epoch * formula 
+  | Sofar        of timecone * epoch * formula
   
   | Cohere       of var * formula * formula (* it's a global relation ... but embedding is subtle *)
-
+  
   | Fandw        of epoch * formula (* ONLY for use when simplifying formulas for Z3 *)
   | App          of name * formula list (* these are currently provided for the benefit
                                            of askZ3 in the embedding of stuff.
@@ -116,6 +117,7 @@ let _App       n fs        = App (n,fs)
 let _Sofar     tc ep f     = Sofar (tc,ep,f)
 let _Cohere    v f1 f2     = Cohere (v,f1,f2)
 let _Threaded  tid f       = Threaded (tid,f)
+let _Latest    tc ep v     = Latest (tc,ep,v)
 
 (* let _At_int i = At_int i *)
 
@@ -189,6 +191,8 @@ let _recSofar = _frec <...> _Sofar
 let _recCohere = _frec <...> _Cohere
 
 let _recThreaded = _frec <..> _Threaded
+
+let _recLatest = _frec <...> _Latest
 
 (* ********************* replacing fnodes ********************** *)
 
@@ -377,6 +381,7 @@ let m_sitf_token    = "sitf" (* somewhere in the forest *)
 let m_Sofar_token   = "sofar"  
 let m_ouat_token    = "ouat" (* once upon a time *)
 let since_token     = "since"
+let m_Latest_token  = "latest"
 let cohere_token    = "_c"
 let coherevar_token = "_cv"
 let arraystore_token = "++"
@@ -430,13 +435,13 @@ let mustbracket_right (supassoc, supprio) (rassoc,rprio) =
 
 let formulaprio f = 
   match f.fnode with 
-  | Fint _ 
-  | Fbool _ 
-  | Freg _ 
-  | Fvar _ 
-  | Flogc _
+  | Fint     _ 
+  | Fbool    _ 
+  | Freg     _ 
+  | Fvar     _ 
+  | Flogc    _
   | Negarith _ 
-  | Not _                       -> primaryprio
+  | Not      _                  -> primaryprio
   | Arith   (left, aop, right)  -> arithprio aop
   | Compare (left, cop, right)  -> compprio cop
   | LogArith(left, lop, right)  -> logprio lop
@@ -444,14 +449,15 @@ let formulaprio f =
   | ArraySel _                  -> arrayselprio 
   | ArrayStore _                -> arraystoreprio
   | Binder _                    -> primaryprio
-  | Tuple _                     -> commaprio
-  | Since _                     -> Left, 5 (* below Implies *)
-  | Bfr _                       -> primaryprio (* because it's printed as an app *)
-  | Univ _                      -> primaryprio (* because it's printed as an app *)
+  | Tuple  _                    -> commaprio
+  | Since  _                    -> Left, 5 (* below Implies *)
+  | Bfr    _                    -> primaryprio (* because it's printed as an app *)
+  | Univ   _                    -> primaryprio (* because it's printed as an app *)
   | Fandw  _                    -> primaryprio (* because it's printed as an app *)
-  | App _                       -> primaryprio
-  | Sofar _                     -> primaryprio (* because it's printed as an app *)
+  | App    _                    -> primaryprio
+  | Sofar  _                    -> primaryprio (* because it's printed as an app *)
   | Cohere _                    -> primaryprio (* because it's printed as an app *)
+  | Latest _                    -> primaryprio (* because it's printed as an app *)
   | Threaded _                  -> abitlessthanprimaryprio (* bracket everything but primaries *) 
   
 let is_primary f = formulaprio f = primaryprio
@@ -546,6 +552,7 @@ let rec string_of_primary f =
       | Cohere (v,f1,f2)       -> cohere_token ^ "(" ^ string_of_var v ^ "," ^ string_of_args [f1;f2] ^ ")"
       | ArraySel (af,ixf)      -> let afprio = formulaprio af in
                                   bracket_left afprio arrayselprio af ^ "[" ^ string_of_formula ixf ^ "]"
+      | Latest (tc,ep,v)       -> string_of_tc tc ^ string_of_ep ep ^ m_Latest_token ^ "(" ^ string_of_var v ^ ")"
       | _                      -> bracketed_string_of_formula f
 
 and bracketed_string_of_formula f = "(" ^ string_of_formula f ^ ")"
@@ -581,7 +588,8 @@ and string_of_formula f =
   | App          _  
   | Sofar        _ 
   | Cohere       _            
-  | ArraySel     _              -> string_of_primary f
+  | ArraySel     _              
+  | Latest       _              -> string_of_primary f
   | Arith   (left, aop, right)  -> string_of_binary_formula left right (string_of_arithop   aop) (arithprio aop)
   | Compare (left, cop, right)  -> string_of_binary_formula left right (string_of_compareop cop) (compprio cop)
   | LogArith(left, lop, right)  -> 
@@ -633,7 +641,7 @@ and compare_shorthand f =
                             (string_of_cseq rights)
                             (leftright=rightleft);
             *)
-           (* this test isn't good enough, but we're not ready for striploc yet, are we? *)
+           (* this test isn't good enough, but we're not ready for stripspos yet, are we? *)
            if leftright=rightleft then Some (left,right,lefts@rights) else None
        | _ -> None
       )
@@ -695,6 +703,8 @@ let indented_string_of_formula just_log indent f =
       | Freg         _
       | Fvar         _
       | Flogc        _         -> true
+      (* these could come apart, but come on! *)
+      | Latest       _         -> true
       (* these stay together, unless we want them apart or they are too wide *)
       | Negarith       _ 
       | Arith        _ 
@@ -791,11 +801,12 @@ let indented_string_of_formula just_log indent f =
     | Some (tc,ep,name,f) ->  isf_app (string_of_tc tc ^ string_of_ep ep ^ name) [f]
     | None                ->
         match f.fnode with
-        | Fint _ 
-        | Fbool _ 
-        | Freg _ 
-        | Fvar _ 
-        | Flogc _                     -> raise (Invalid_argument ("indented_string_of_formula.isf_lines " ^ string_of_formula f))
+        | Fint  _                     (* these are all one-liners: shouldn't appear here *)
+        | Fbool  _ 
+        | Freg   _ 
+        | Fvar   _ 
+        | Flogc  _    
+        | Latest _                    -> raise (Invalid_argument ("indented_string_of_formula.isf_lines " ^ string_of_formula f))
         | Negarith f                  -> isf_prefix "-" (not (is_primary f)) f
         | Not     f'                  -> isf_prefix "!" (not (is_primary f')) f'
         | Arith    (left, aop, right) -> isb left right (string_of_arithop   aop) (arithprio aop)
@@ -867,7 +878,8 @@ let optexists (optp: formula -> 'a option) f =
       | Fbool    _
       | Freg     _
       | Fvar     _            
-      | Flogc    _            -> None
+      | Flogc    _            
+      | Latest   _            -> None
       | Negarith f 
       | Not      f            -> ef f
       | Arith     (f1,_,f2)
@@ -903,7 +915,8 @@ let optfold (optp: 'a -> formula -> 'a option) x =
         | Fbool    _
         | Freg     _
         | Fvar     _            
-        | Flogc    _            -> None
+        | Flogc    _            
+        | Latest   _            -> None
         | Negarith  f
         | Not       f           -> ofold x f
         | Arith     (f1,_,f2)
@@ -944,7 +957,8 @@ let optmap ff f =
                           | Fbool    _
                           | Freg     _
                           | Fvar     _            
-                          | Flogc    _            -> None
+                          | Flogc    _            
+                          | Latest   _            -> None
                           | Negarith f            -> trav f &~~ take1 _Negarith
                           | Not      f            -> trav f &~~ take1 _Not
                           | Arith    (f1,op,f2)   -> trav2 f1 f2 &~~ take2 (revargs _Arith op) 
@@ -1012,7 +1026,8 @@ let optmapfold ff x f =
                        | Fbool     _
                        | Freg      _
                        | Fvar      _            
-                       | Flogc     _          -> x,None
+                       | Flogc     _          
+                       | Latest    _          -> x,None
                        | Negarith  f          -> unary f _recNegative
                        | Not       f          -> unary f negate
                        | Arith     (f1,op,f2) -> binary f1 f2 (revargs _recArith op)
@@ -1072,11 +1087,11 @@ let rec optreloc newloc f =
 
 and reloc newloc f = (optreloc newloc ||~ id) f 
 
-let optstriploc = optreloc dummy_spos
+let optstripspos = optreloc dummy_spos
 
-let striploc = reloc dummy_spos
+let stripspos = reloc dummy_spos
 
-let eq f1 f2 = striploc f1 = striploc f2
+let eq f1 f2 = stripspos f1 = stripspos f2
 
 (* let is_threadsavvy = 
      exists (fun f -> match f.fnode with 
@@ -1170,7 +1185,7 @@ let is_pure =
 
 (* *********************** formula sets ******************************* *)
 
-(* ************** sets of formulas: only safe when striploc'd; ************
+(* ************** sets of formulas: only safe when stripspos'd; ************
    ************** use addformula not FormulaSet.add;           ************
    ************** use memformula not FormulaSet.mem            ************ *)
 
@@ -1179,5 +1194,5 @@ module FormulaSet = MySet.Make (struct type t = formula
                                        let to_string = string_of_formula
                                 end)
 
-let addformula = FormulaSet.add <.> striploc
-let memformula = FormulaSet.mem <.> striploc
+let addformula = FormulaSet.add <.> stripspos
+let memformula = FormulaSet.mem <.> stripspos

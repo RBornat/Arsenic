@@ -29,14 +29,14 @@ let string_of_scloc = function
 
 type componentid =
   | CidSimplecom of simplecom triplet
-  | CidControl   of condition triplet
+  | CidControl   of condition
   | CidInit      of label * formula
   | CidFinal     of label * formula
   | CidThreadPost of knot
   
 let string_of_componentid = function
   | CidSimplecom ct  -> string_of_triplet string_of_simplecom ct
-  | CidControl ft    -> string_of_triplet string_of_condition ft
+  | CidControl c     -> string_of_condition c
   | CidInit  (lab,f)
   | CidFinal (lab,f) -> Printf.sprintf "{%s:%s}"
                                        (string_of_label lab)

@@ -67,8 +67,8 @@
       | Fvar  (Here,Now,v) -> if (* not (NameSet.mem v binders) *) true
                               then Some (badfs, addname v set)
                               else None
-      | Fvar      _ 
-      | Ite         _
+      | Fvar       _ 
+      | Ite        _
       | ArraySel   _
       | ArrayStore _
       | Binder     _   
@@ -161,7 +161,7 @@
                     string_of_list string_of_formula "," rights
     in
     let bad_interferenceform () = 
-      bad (assign() ^ " in interference description: only location:=formula[,formula]* assignments are allowed")
+      bad (assign() ^ " in interference description: only location[,location]*:=formula[,formula]* assignments are allowed")
     in
     let isreg_lhs lhs = 
       match lhs with 
@@ -226,21 +226,21 @@
            in
            let rights = List.map loc_rhs rights in
            let rslocs = List.combine (List.map (List.map locv) lefts) rights in
-           let check_single is_first (rs,location) = 
+           let check_single is_first (rs,loc) = 
              (* first lhs can have a realreg in first position *)
              if not is_first && Name.is_realreg (List.hd rs) then 
                bad ("only first left-hand element may name an actual (non-auxiliary) register");
              (* if realreg first, rhs must be real *)
              if Name.is_realreg (List.hd rs) then
-               (match location with
+               (match loc with
                 | VarLoc v -> 
                     if Name.is_auxvar v then
                       bad ("cannot assign value from auxiliary variable " ^ string_of_var v ^
                            " to " ^ prefixed_phrase_of_list string_of_reg "actual register" "actual registers" rs
                           )
                 | ArrayLoc (v,ixf) ->
-                    if Name.is_auxvar v then
-                      bad ("cannot assign value from auxiliary array " ^ string_of_var v ^
+                    if is_auxloc loc then
+                      bad ("cannot assign value from auxiliary array reference " ^ string_of_location loc ^
                            " to " ^ prefixed_phrase_of_list string_of_reg "actual register" "actual registers" rs
                           );
                     ignore (check_realpure true binders ixf)
@@ -251,21 +251,21 @@
            (* that's it, I think *)
            let b = 
              match synchro, rslocs with
-             | LocalAssign     , _   -> false
-             | LoadLogical     , [_] -> true
-             | LoadLogical     , _   -> bad ("multi-location load-logical " ^ string_of_synchro synchro ^
-                                           " register assignment"
-                                          )
-             | StoreConditional, _   -> bad ("store-conditional operator " ^ string_of_synchro synchro ^
-                                             " used in register assignment"
-                                            )
+             | LocalAssign     , _       -> false
+             | LoadLogical     , [_,loc] -> if is_auxloc loc then bad "auxiliary load-logical" else true
+             | LoadLogical     , _       -> bad ("multi-location load-logical " ^ string_of_synchro synchro ^
+                                                 " register assignment"
+                                                )
+             | StoreConditional, _       -> bad ("store-conditional operator " ^ string_of_synchro synchro ^
+                                                 " used in register assignment"
+                                                )
            in
            RsbecomeLocs (b, rslocs)
        | []  , rights ->
            ((* it had better be a single-register assignment *)
             match lefts, rights, synchro with
-            | [[location]], [e], LocalAssign      -> RbecomesE (locv location,e)
-            | [[location]], [e], StoreConditional -> 
+            | [[loc]], [e], LocalAssign      -> RbecomesE (locv loc,e)
+            | [[loc]], [e], StoreConditional -> 
                     bad ("store-conditional operator " ^ string_of_synchro synchro ^
                          " used in register assignment"
                         )
@@ -319,14 +319,13 @@
              )
        ;
        let loces = List.combine lefts rights in
-       let check_single is_first (location,e) =
-         let v = locv location in
+       let check_single is_first (loc,e) =
          (* first can be real assignment; others must be auxiliary *)
-         if not is_first && Name.is_realvar v then
-           bad ("non-auxiliary location " ^ string_of_location location ^ " can only be assigned as \
+         if not is_first && not (is_auxloc loc) then
+           bad ("non-auxiliary location " ^ string_of_location loc ^ " can only be assigned as \
                  first component of multiple assignment");
-         (* if the left is a real var and the right is a tuple, first tuple element must be real *)
-         (match Name.is_realvar v, e.fnode with
+         (* if the left is real location and the right is a tuple, first tuple element must be real *)
+         (match is_auxloc loc, e.fnode with
           | true, Tuple (f::fs) ->
               ignore (check_realpure ok_logc binders f);
               List.iter (ignore <.> check_anypure ok_logc binders) fs
@@ -335,31 +334,24 @@
           | false, _ ->
               ignore (check_anypure ok_logc binders e)
          )
-         ;
-         (* if the left is a real location then it must have a real ixf *)
-         (match location with
-          | VarLoc _         -> ()
-          | ArrayLoc (v,ixf) -> if Name.is_realvar v then ignore (check_realpure true binders ixf)
-         )
        in
        check_single true (List.hd loces);
        List.iter (check_single false) (List.tl loces);
        (* and that seems to be it *)
        let b =
          match loces, is_com, synchro with
-         | _  , true , LocalAssign      
-         | [_], false, LocalAssign      -> false
-         | _  , false, LocalAssign      -> bad_interferenceform ()
-         | [_], true , StoreConditional -> true 
-         | _  , true , StoreConditional -> bad ("store-conditional operator " ^ string_of_synchro synchro ^
-                                                " used in multi-location assignment"
-                                               ) 
-         | _  , false, StoreConditional -> bad ("store-conditional operator " ^ string_of_synchro synchro ^
-                                                " used in interference assignment"
-                                               )
-         | _  , _    , LoadLogical      -> bad ("load-logical operator " ^ string_of_synchro synchro ^
-                                                " used in location assignment"
-                                               )
+         | _      , _    , LocalAssign      -> false
+         | [loc,e], true , StoreConditional -> if is_auxloc loc then bad "auxiliary store-conditional"
+                                               else true
+         | _      , true , StoreConditional -> bad ("store-conditional operator " ^ string_of_synchro synchro ^
+                                                    " used in multi-location assignment"
+                                                   ) 
+         | _      , false, StoreConditional -> bad ("store-conditional operator " ^ string_of_synchro synchro ^
+                                                    " used in interference assignment"
+                                                   )
+         | _      , _    , LoadLogical      -> bad ("load-logical operator " ^ string_of_synchro synchro ^
+                                                    " used in location assignment"
+                                                   )
        in
        LocbecomesEs (b, loces)
       )
@@ -383,14 +375,14 @@
    
   let check_conditional_assign assign =
     match classify_assign true true NameSet.empty assign with
-    | LocbecomesEs _ as a -> a
-    | _                   -> bad ("assignment in conditional must be store-conditional " ^ string_of_synchro StoreConditional)
+    | LocbecomesEs (true,_) as a -> a
+    | _                          -> bad ("conditional assignment must be store-conditional")
     
   let rec makebinder bindf locnames f = 
     match locnames with
     | [] -> f (* we can't actually parse an empty locname list, so this is just for recursion *)
-    | (location,n)::locnames -> let f = makebinder bindf locnames f in
-                           Formula.fadorn (spos_of_sposspos location f.fpos) (bindf n f)
+    | (loc,n)::locnames -> let f = makebinder bindf locnames f in
+                           Formula.fadorn (spos_of_sposspos loc f.fpos) (bindf n f)
                            
   let tcep_apply tc ep f =
     let wrong s =
@@ -524,6 +516,9 @@
     | KnotAlt _ -> bad "thread postcondition knot can't be an ordered disjunction"
     | _         -> ()
 
+  type conditionthing =
+    | CTAssign of Location.location list list * Assign.synchro * Formula.formula list
+    | CTExpr   of formula
 %}
 
 %token LPAR RPAR
@@ -535,7 +530,7 @@
 %token THREADSEP
 
 %token SEMICOLON
-%token IF THEN ELSE FI ASSUME
+%token IF THEN ELSE FI /* ASSUME */
 %token WHILE DO OD UNTIL
 %token SKIP ASSERT
 
@@ -565,7 +560,7 @@
 %left ARRAYMAPS
 %left ARRAYSTORE
 
-%token SOFAR OUAT COHERE COHEREVAR FANDW SITF 
+%token SOFAR OUAT COHERE COHEREVAR FANDW /* SITF */ LATEST
 %token BFR UNIV SINCE
 
 %token TRUE FALSE /* TOP TOPRELY BACKSLASH */
@@ -578,7 +573,7 @@
 
 %token COLON BAR EOP 
 
-%token GUARANTEE INTERNAL GIVEN MACRO TMACRO RELY
+%token GUARANTEE /* INTERNAL*/  GIVEN MACRO TMACRO RELY
 
 %token Q_ASSERT Q_AGAINST Q_SP Q_SAT
 
@@ -691,7 +686,7 @@ com:
   | structcom                           { Structcom $1}
 
 comtriplet:
-  | preknot preopt loclabel COLON scomnode          
+  | preknot ipreopt loclabel COLON scomnode          
                                         { let ok () = tripletadorn $1 $3 (simplecomadorn $2 $5) in
                                           match $2, $5 with
                                           | Some _, Assign a
@@ -708,9 +703,16 @@ preknot:
   | knot                                {$1}
   |                                     {knotadorn (SimpleKnot [])}
 
-preopt:
-  | LSSQBRA formula RSSQBRA             { Some (check_assertion false $2) }
-  |                                     { None                            }
+ipreopt:
+  | LSSQBRA formula RSSQBRA             { Some (IpreSimple (check_assertion false $2)) }
+  | LSSQBRA TIMES COLON formula RSSQBRA { Some (IpreRes (check_assertion false $4)) }
+  | LSSQBRA formula SEMICOLON TIMES COLON formula RSSQBRA 
+                                        { Some (IpreDouble (check_assertion false $2, 
+                                                            check_assertion false $6
+                                                           )
+                                               ) 
+                                        }
+  |                                     { None }
 
 knot:
   | LSBRACE stitchlist RSBRACE          { knotadorn  (SimpleKnot $2)                  }
@@ -741,7 +743,14 @@ stitchlocopt:
   |                                     { None }
   
 stitchspopt:
-  | LBRACE formula RBRACE               { Some (check_assertion false $2) }
+  | LBRACE formula RBRACE               { Some (SpostSimple (check_assertion false $2)) }
+  | LBRACE TIMES COLON formula RBRACE   { Some (SpostRes (check_assertion false $4)) }
+  | LBRACE formula SEMICOLON TIMES COLON formula RBRACE 
+                                        { Some (SpostDouble (check_assertion false $2, 
+                                                             check_assertion false $6
+                                                            )
+                                               ) 
+                                        }
   |                                     { None }
   
 node:
@@ -760,7 +769,7 @@ loclabel:
   | label                               { {labspos=get_sourcepos(); lablab=$1} }
 
 label:
-  | name                                { $1 }
+  | NAME                                { $1 }
   
 order:
   | LO                                  {Lo}
@@ -771,11 +780,18 @@ order:
 scomnode:
   | SKIP                                { Skip                                   }
   | ASSERT formula                      { Assert (check_assertion false $2)      }
-  | assign                              { Assign (classify_assign true true NameSet.empty $1) }
+  | assign                              { let a = classify_assign true true NameSet.empty $1 in
+                                          if Assign.is_storeconditional a then
+                                            report (Error (get_sourcepos(),
+                                                           "store-conditional as command, not control condition"
+                                                          )
+                                                   );
+                                          Assign a
+                                        }
     
 /* for some reason this doesn't work if I use timecone and epoch or even tcep */
 fname:
-  | LPAR MINUS RPAR name                { if NameMap.mem $4 !macros then
+  | LPAR MINUS RPAR NAME                { if NameMap.mem $4 !macros then
                                             bad ("macro_expand name " ^ string_of_name $4 ^ " follows (-)")
                                           else
                                           if is_anyvar $4 then fadorn (Fvar (Here,Was,$4)) 
@@ -784,7 +800,7 @@ fname:
                                                  " should be variable in order to follow (-)"
                                                 )
                                         }
-  | LPAR HAT RPAR name                  { if NameMap.mem $4 !macros then
+  | LPAR HAT RPAR NAME                  { if NameMap.mem $4 !macros then
                                             bad ("macro_expand name " ^ string_of_name $4 ^ " follows (^)")
                                           else
                                           if is_anyvar $4 then fadorn (Fvar (There,Now,$4)) else
@@ -794,14 +810,15 @@ fname:
                                         }
   | LPAR MINUS RPAR
     LPAR HAT RPAR
-    name                                { bad ($7 ^ " can't be both (^) and (-)") }
+    NAME                                { bad ($7 ^ " can't be both (^) and (-)") }
   | LPAR HAT RPAR
     LPAR MINUS RPAR
-    name                                { bad ($7 ^ " can't be both (^) and (-)") }
-  | name                                { match macro_expand $1 None with
+    NAME                                { bad ($7 ^ " can't be both (^) and (-)") }
+  | NAME                                { match macro_expand $1 None with
                                           | None   -> fadorn (classify_var $1)
                                           | Some f -> f
                                         }
+  | PMSREG                              { fadorn (classify_var $1) }
 
 timecone:
   | LPAR HAT RPAR                       {if !Settings.allow_tcep then There
@@ -846,7 +863,7 @@ lhss:
   | lhs COMMA lhss                      {$1::$3}
   
 lhs:
-  | location                                 {[$1]}
+  | location                            {[$1]}
   | LPAR loclist RPAR                   {$2}
 
 location:
@@ -854,8 +871,8 @@ location:
   | name SQBRA formula SQKET            {ArrayLoc ($1,$3)}
 
 loclist:
-  | location                                 {[$1]}
-  | location COMMA loclist                   {$1::$3}
+  | location                            {[$1]}
+  | location COMMA loclist              {$1::$3}
   
 formulas:  
   | formula                             {[$1]}
@@ -872,9 +889,22 @@ structcom:
   | DO seq UNTIL condition              {structsimplecomadorn(DoUntil ($2,$4))}
 
 condition:
-  | preknot loclabel COLON assign       { tripletadorn $1 $2 (CAssign (check_conditional_assign $4)) }
-  | preknot loclabel COLON formula      { tripletadorn $1 $2 (CExpr $4) }
- 
+  | preknot ipreopt loclabel COLON conditionthing       
+                                        { match $5 with
+                                          | CTAssign (locs, op, es) ->
+                                              let assign = Assign (check_conditional_assign (locs, op, es)) in
+                                              let scomnode = simplecomadorn $2 assign in
+                                              CAssign (tripletadorn $1 $3 scomnode) 
+                                          | CTExpr e ->
+                                              if $2=None then 
+                                                CExpr (tripletadorn $1 $3 e)
+                                              else bad "control expression with an interference pre"
+                                        }
+
+conditionthing:
+  | assign                              { let (locs, op, es) = $1 in CTAssign (locs, op, es) }
+  | formula                             { CTExpr $1 }
+  
 primary:
   | INT                                 {fadorn(Fint $1)}
   | TRUE                                {fadorn(Fbool true)}
@@ -889,6 +919,9 @@ primary:
                                         }
   | tcep OUAT LPAR formula RPAR         {let tc, ep = $1 in
                                          fadorn (ouat tc ep $4).fnode
+                                        }
+  | tcep LATEST LPAR latestname RPAR    { let tc, ep = $1 in
+                                          fadorn (Latest (tc,ep,$4))
                                         }
 /*
   | epoch USOFAR LPAR formula RPAR      {fadorn (Univ ($1, fadorn (Sofar (Here, Now, $4))))}
@@ -937,6 +970,18 @@ primary:
   | IF formula THEN formula ELSE formula FI
                                         {fadorn (Ite ($2,$4,$6))}
 
+latestname:
+  | NAME                                { let badname () = bad "name in 'latest' must be simple variable" in
+                                          match macro_expand $1 None with
+                                          | Some f ->
+                                             (match f.fnode with
+                                              | Fvar (Here, Now, v) -> v
+                                              | _                   -> badname ()
+                                             )
+                                         | None   -> 
+                                             if is_anyvar $1 then $1
+                                             else badname ()
+                                        }
 compare_op:
   | LESS                                { Less }
   | LESSEQUAL                           { LessEqual }
@@ -946,15 +991,14 @@ compare_op:
   | GREATER                             { Greater }
 
 comparison:
-  | %prec AND 
-    formula compare_op formula          { let r = $1,fadorn(Compare($1,$2,$3)) in 
+  | formula compare_op formula 
+    %prec AND                           { let r = $1,fadorn(Compare($1,$2,$3)) in 
                                           (* Printf.printf "\nrule 1 building %s" 
                                                 (bracketed_string_of_pair string_of_formula string_of_formula r); 
                                            *)
                                           r  
                                         }
-  | %prec AND 
-    formula compare_op comparison       { let c, right = $3 in
+  | formula compare_op comparison        { let c, right = $3 in
                                           (* Printf.printf "\nrule 2 sees %s" 
                                                 (bracketed_string_of_pair string_of_formula string_of_formula $3);
                                            *)
@@ -1009,6 +1053,9 @@ boundnames:
 
 name:
   | NAME                                {$1}
+  | pmsreg                              {$1}
+
+pmsreg:
   | PMSREG                              {let i,r = pmsc_parts $1 in
                                          if string_of_int (int_of_string i)=i 
                                            then $1

@@ -9,8 +9,18 @@ open Assign
    Licensed under the MIT license (sic): see LICENCE.txt or
    https://opensource.org/licenses/MIT
  *)
- 
-type simplecom = {sc_pos: sourcepos; sc_ipreopt: formula option; sc_node: scomnode}
+
+type ipre = 
+  | IpreSimple of formula
+  | IpreRes    of formula
+  | IpreDouble of formula * formula (* normal, reserved *)
+  
+let string_of_ipre = function
+  | IpreSimple f       -> "[*" ^ string_of_formula f ^ "*]"
+  | IpreRes    f       -> "[* *:" ^ string_of_formula f ^ "*]"
+  | IpreDouble (f1,f2) -> "[*" ^ string_of_formula f1 ^ "; *:" ^ string_of_formula f2 ^ "*]"
+
+type simplecom = {sc_pos: sourcepos; sc_ipreopt: ipre option; sc_node: scomnode}
 
 and scomnode =
   | Skip
@@ -20,19 +30,19 @@ and scomnode =
 and structcom = {structcompos: sourcepos; structcomnode: structcomnode}
 
 and structcomnode = 
-  | If of condition triplet * seq * seq
-  | While of condition triplet * seq
-  | DoUntil of seq * condition triplet 
+  | If of condition * seq * seq
+  | While of condition * seq
+  | DoUntil of seq * condition 
 
 and condition = 
-  | CExpr of formula
-  | CAssign of assign
+  | CExpr of formula triplet
+  | CAssign of simplecom triplet
   
 and 'a triplet = 
-  { tripletpos: sourcepos;
+  { tripletpos : sourcepos;
     tripletknot: knot; 
-    tripletlab: positionedlabel; 
-    tripletof: 'a 
+    tripletlab : positionedlabel; 
+    tripletof  : 'a 
   }
 
 and com = 
@@ -40,10 +50,6 @@ and com =
   | Structcom of structcom
   
 and seq = com list
-
-let is_simplecom = function
-  | Com _ -> true
-  | _     -> false
 
 let tripletadorn spos knot lab tof = {tripletpos=spos; tripletknot=knot; tripletlab=lab; tripletof=tof}
 
@@ -53,43 +59,6 @@ let structsimplecomadorn spos node = {structcompos = spos; structcomnode=node}
 
 let _simplecomrec = simplecomadorn Sourcepos.dummy_spos
 
-let loc_of_com = function
-  | Com ct       -> ct.tripletpos
-  | Structcom sc -> sc.structcompos
-  
-let lab_of_triplet {tripletlab=lab} = lab.lablab
-let knot_of_triplet {tripletknot=knot} = knot
-
-let is_assign {tripletof=simplecom} =
-  match simplecom.sc_node with
-  | Assign _ -> true
-  | _        -> false
-  
-let is_var_assign {tripletof=simplecom} =
-  match simplecom.sc_node with
-  | Assign a -> Assign.is_var_assign a
-  | _        -> false
-  
-let is_aux_assign {tripletof=simplecom} =
-  match simplecom.sc_node with
-  | Assign a -> Assign.is_aux_assign a
-  | _        -> false
-  
-let rec fstlab_seq = function
-  | com::_ -> fstlab_com com
-  | []     -> raise Not_found
-  
-and fstlab_com = function
-  | Com triplet  -> lab_of_triplet triplet
-  | Structcom sc -> fstlab_structcom sc
-  
-and fstlab_structcom sc =
-  match sc.structcomnode with
-  | If (ft,_,_)    -> lab_of_triplet ft
-  | While (ft,_)   -> lab_of_triplet ft
-  | DoUntil (s,ft) ->
-      (try fstlab_seq s with Not_found -> lab_of_triplet ft)
-        
 let sot sok string_of_alpha {tripletknot=knot; tripletlab=lab; tripletof=alpha} =
   (match knot.knotnode with
    | SimpleKnot [] -> ""
@@ -100,10 +69,6 @@ let sot sok string_of_alpha {tripletknot=knot; tripletlab=lab; tripletof=alpha} 
 
 let string_of_triplet string_of_alpha = sot string_of_knot string_of_alpha
 
-let string_of_iopt = function
-  | None   -> ""
-  | Some f -> "[*" ^ string_of_formula f ^ "*]"
-
 let string_of_scomnode = function
   | Skip     -> "skip"
   | Assert f -> Printf.sprintf "assert %s" (Formula.string_of_formula f)
@@ -112,8 +77,8 @@ let string_of_scomnode = function
 let rec string_of_simplecom {sc_ipreopt = iopt; sc_node = c} = 
   Printf.sprintf "%s"
     (match iopt with
-     | None   -> string_of_scomnode c
-     | Some f -> string_of_iopt iopt ^ " " ^ string_of_scomnode c
+     | None      -> string_of_scomnode c
+     | Some ipre -> string_of_ipre ipre ^ " " ^ string_of_scomnode c
     )
   
 and string_of_com indent = function
@@ -126,73 +91,169 @@ and string_of_seq indent cs =
 and string_of_structcom indent sc = 
   let indent' = indent ^ "  " in
   match sc.structcomnode with 
-  | If (c,s1,[])        -> "if " ^ string_of_triplet string_of_condition c ^ 
+  | If (c,s1,[])        -> "if " ^ string_of_condition c ^ 
                            " then\n" ^ indent' ^ string_of_seq indent' s1 ^ 
                            "\n" ^ indent ^ "fi"
-  | If (c,s1,s2)        -> "if " ^ string_of_triplet string_of_condition c ^ 
+  | If (c,s1,s2)        -> "if " ^ string_of_condition c ^ 
                            " then\n" ^ indent' ^ string_of_seq indent' s1 ^ 
                            "\n" ^ indent ^ "else\n" ^ indent' ^ string_of_seq indent' s2 ^ 
                            "\n" ^ indent ^ "fi"
-  | While (c,s)         -> "while " ^ string_of_triplet string_of_condition c ^ 
+  | While (c,s)         -> "while " ^ string_of_condition c ^ 
                            " do\n" ^ indent' ^ string_of_seq indent' s ^ 
                            "\n" ^ indent ^ "od"
   | DoUntil (s,c)       -> "do\n" ^ indent' ^ string_of_seq indent' s ^ 
-                           "\n" ^ indent ^ "until " ^ string_of_triplet string_of_condition c 
+                           "\n" ^ indent ^ "until " ^ string_of_condition c 
 
 and string_of_condition = function
-  | CExpr f -> string_of_formula f
-  | CAssign a -> string_of_assign a
+  | CExpr   ft -> string_of_triplet string_of_formula ft
+  | CAssign ct -> string_of_triplet string_of_simplecom ct
+  
+let is_simplecom = function
+  | Com _ -> true
+  | _     -> false
+
+let loc_of_com = function
+  | Com ct       -> ct.tripletpos
+  | Structcom sc -> sc.structcompos
+  
+let lab_of_triplet {tripletlab=lab} = lab.lablab
+let knot_of_triplet {tripletknot=knot} = knot
+
+let poslab_of_condition c = match c with 
+                            | CExpr   ft -> ft.tripletlab
+                            | CAssign ct -> ct.tripletlab     
+
+let knot_of_condition c = match c with 
+                          | CExpr   ft -> ft.tripletknot
+                          | CAssign ct -> ct.tripletknot     
+
+let is_assign {tripletof=simplecom} =
+  match simplecom.sc_node with
+  | Assign _ -> true
+  | _        -> false
+  
+let is_reg_assign {tripletof=simplecom} =
+  match simplecom.sc_node with
+  | Assign a -> Assign.is_reg_assign a
+  | _        -> false
+  
+let is_var_assign {tripletof=simplecom} =
+  match simplecom.sc_node with
+  | Assign a -> Assign.is_var_assign a
+  | _        -> false
+  
+let is_aux_assign {tripletof=simplecom} =
+  match simplecom.sc_node with
+  | Assign a -> Assign.is_aux_assign a
+  | _        -> false
+  
+let is_loadlogical {tripletof=simplecom} =
+  match simplecom.sc_node with
+  | Assign a -> Assign.is_loadlogical a
+  | _        -> false
+  
+let is_storeconditional {tripletof=simplecom} =
+  match simplecom.sc_node with
+  | Assign a -> Assign.is_storeconditional a
+  | _        -> false
+
+let assign ct =
+  match ct.tripletof.sc_node with
+  | Assign a -> a
+  | _        -> raise (Invalid_argument (Printf.sprintf "%s Com.assign %s" 
+                                             (string_of_sourcepos ct.tripletpos)
+                                             (string_of_triplet string_of_simplecom ct)
+                                        )
+                      )
+  
+let reserved ct =
+  match ct.tripletof.sc_node with
+  | Assign a -> Assign.reserved a
+  | _        -> raise (Invalid_argument (Printf.sprintf "%s Com.reserved %s" 
+                                             (string_of_sourcepos ct.tripletpos)
+                                             (string_of_triplet string_of_simplecom ct)
+                                        )
+                      )
+
+let rec fstlab_seq = function
+  | com::_ -> fstlab_com com
+  | []     -> raise Not_found
+  
+and fstlab_com = function
+  | Com triplet  -> lab_of_triplet triplet
+  | Structcom sc -> fstlab_structcom sc
+  
+and fstlab_structcom sc =
+  match sc.structcomnode with
+  | If (c,_,_)    -> lab_of_condition c
+  | While (c,_)   -> lab_of_condition c
+  | DoUntil (s,c) ->
+      (try fstlab_seq s with Not_found -> lab_of_condition c)
+
+and lab_of_condition = function
+  | CExpr   ft -> lab_of_triplet ft
+  | CAssign ct -> lab_of_triplet ct
   
 (* *************************** folds for com ************************* *)
 
-let rec tripletfold f3c f3f v com = 
+let rec tripletfold fcom ff v com = 
   match com with
-  | Com triplet  -> f3c v triplet
+  | Com triplet  -> fcom v triplet
   | Structcom sc -> 
-      (let foldf = tripletfold f3c f3f in
+      (let fseq = tripletfold fcom ff in
+       let fcond v c =
+         match c with
+         | CExpr   ft -> ff v ft
+         | CAssign ct -> fcom v ct
+       in
        match sc.structcomnode with
-       | If (ft, s1, s2) -> 
-           let v = f3f v ft in
-           let v = List.fold_left foldf v s1 in
-           List.fold_left foldf v s2
-       | While (ft, s) ->
-           let v = f3f v ft in
-           List.fold_left foldf v s
-       | DoUntil (s, ft) ->
-           let v = List.fold_left foldf v s in
-           f3f v ft 
+       | If (c, s1, s2) -> 
+           let v = fcond v c in
+           let v = List.fold_left fseq v s1 in
+           List.fold_left fseq v s2
+       | While (c, s) ->
+           let v = fcond v c in
+           List.fold_left fseq v s
+       | DoUntil (s, c) ->
+           let v = List.fold_left fseq v s in
+           fcond v c 
       )
 
 let rec knotfold fk v = function
   | Com  triplet -> fk v triplet.tripletknot
   | Structcom sc -> 
-      (let foldf = knotfold fk in
+      (let fseq = knotfold fk in
        match sc.structcomnode with
-       | If (ft, s1, s2) -> 
-           let v = fk v ft.tripletknot in
-           let v = List.fold_left foldf v s1 in
-           List.fold_left foldf v s2
-       | While (ft, s) ->
-           let v = fk v ft.tripletknot in
-           List.fold_left foldf v s
-       | DoUntil (s, ft) ->
-           let v = List.fold_left foldf v s in
-           fk v ft.tripletknot 
+       | If (c, s1, s2) -> 
+           let v = fk v (knot_of_condition c) in
+           let v = List.fold_left fseq v s1 in
+           List.fold_left fseq v s2
+       | While (c, s) ->
+           let v = fk v (knot_of_condition c) in
+           List.fold_left fseq v s
+       | DoUntil (s, c) ->
+           let v = List.fold_left fseq v s in
+           fk v (knot_of_condition c) 
       )
 
-let rec simplecomfold ff v = function
-  | Com       ct -> ff v ct
+let rec simplecomfold fsimplecom v = function
+  | Com       ct -> fsimplecom v ct
   | Structcom sc -> 
-      (let foldf = simplecomfold ff in
+      (let fseq = simplecomfold fsimplecom in
+       let fcond v c =
+         match c with 
+         | CExpr   _  -> v
+         | CAssign ct -> fsimplecom v ct
+       in
        match sc.structcomnode with
-       | If (_, s1, s2) -> 
-           List.fold_left foldf 
-             (List.fold_left foldf v s1)
+       | If (c, s1, s2) -> 
+           List.fold_left fseq 
+             (List.fold_left fseq (fcond v c) s1)
              s2
-       | While (ft, s) ->
-           List.fold_left foldf v s
-       | DoUntil (s, ft) ->
-           List.fold_left foldf v s
+       | While (c, s) ->
+           List.fold_left fseq (fcond v c) s
+       | DoUntil (s, c) ->
+           fcond (List.fold_left fseq v s) c
       )
   
   

@@ -16,10 +16,20 @@ type stitch = { stitchpos        : sourcepos;
                 stitchorder      : order; 
                 stitchsource     : node; 
                 stitchlocopt     : (location * bool) option;
-                stitchspopt      : formula option; 
+                stitchspopt      : spost option; 
                 stitchembroidery : formula 
               }
 
+and spost = 
+  | SpostSimple of formula
+  | SpostRes of formula
+  | SpostDouble of formula * formula
+  
+let string_of_spost = function
+  | SpostSimple f       -> "{" ^ string_of_formula f ^ "}"
+  | SpostRes    f       -> "{ *:" ^ string_of_formula f ^ "}"
+  | SpostDouble (f1,f2) -> "{" ^ string_of_formula f1 ^ "; *:" ^ string_of_formula f2 ^ "}"
+  
 let string_of_stitch { stitchorder      = order; 
                        stitchsource     = source;
                        stitchlocopt     = locopt;
@@ -37,7 +47,7 @@ let string_of_stitch { stitchorder      = order;
                  )
                  (match spopt with
                   | None -> ""
-                  | Some f -> Printf.sprintf " {%s}" (string_of_formula f)
+                  | Some f -> Printf.sprintf " {%s}" (string_of_spost f)
                  )
                  (string_of_formula assertion)
 
@@ -50,17 +60,13 @@ let stitchadorn spos order source locopt spopt assertion =
     stitchembroidery = assertion 
   }
 
-let pos_of_stitch    s = s.stitchpos
-let order_of_stitch  s = s.stitchorder
-let source_of_stitch s = s.stitchsource
-let locopt_of_stitch s = s.stitchlocopt
-let spopt_of_stitch  s = s.stitchspopt
+let pos_of_stitch       s = s.stitchpos
+let order_of_stitch     s = s.stitchorder
+let source_of_stitch    s = s.stitchsource
+let locopt_of_stitch    s = s.stitchlocopt
+let spopt_of_stitch     s = s.stitchspopt
+let assertion_of_stitch s = s.stitchembroidery
 
-let assertion_of_stitch ikind {stitchorder=order; stitchembroidery=assertion} = 
-  match order with
-  | Go -> (* if not (!Settings.param_LocalSpec) then _recTrue else *)
-          if ikind=External then assertion else
-          Order.quotient Go ikind assertion
-  | _  -> assertion
+let is_go = Order.is_go <.> order_of_stitch
 
-let string_of_assertion_of_stitch sof {stitchembroidery=assertion} = sof assertion
+let is_reserved_stitch s = match locopt_of_stitch s with Some (_,true) -> true | _ -> false
