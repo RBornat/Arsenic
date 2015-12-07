@@ -244,6 +244,8 @@ let z3check_query question task noisy assertions query =
          let assertions = 
            if !Settings.param_SCloc then
              (let frees = List.fold_left Formula.fof NameSet.empty (query::assertions) in
+              (* x&new is a technical construct. We don't need coherence for it ... *)
+              let frees = NameSet.filter (fun v -> not (Stringutils.ends_with v "&new")) frees in
               assertions @ coherencevar_assertions frees cvars 
              )
            else assertions
@@ -263,12 +265,12 @@ let z3check_query question task noisy assertions query =
          let state_params, state_paramtypes = List.split varmap in
          
          (* do the embedding *)
-         let embed () =
+         let embed is_stabq () =
            let modal_cxt, assertions = 
-             Listutils.mapfold (Modality.embed binders) [] assertions 
+             Listutils.mapfold (Modality.embed is_stabq binders) [] assertions 
            in
            let modal_cxt, query = 
-             Modality.embed binders modal_cxt query
+             Modality.embed is_stabq binders modal_cxt query
            in
            let coherencetypes =
              List.fold_left (fun set binding -> match extract_coherencetype binding with
@@ -290,13 +292,20 @@ let z3check_query question task noisy assertions query =
            let assertions = assertions@axioms in
            modal_cxt, query, assertions
          in
+         (* if a query has hatting or hooking, then it's a stability query. Actually it's
+            if and only if, because since we embraced SCloc there is always x=xhat in 
+            stability queries.
+            
+            Use 0, 1 as thread numbers, and translate latest(x) as x=xhat (otherwise it's
+            x=x^(-1), which makes it an uninterpreted boolean function).
+          *)
          let modal_cxt, query, assertions =
          if List.exists (Formula.exists is_hatted) (query::assertions) then
            Settings.temp_setting Thread.threadnum 0 (fun () ->
-             Settings.temp_setting Thread.threadcount 2 embed
+             Settings.temp_setting Thread.threadcount 2 (embed true)
            )
          else
-           embed ()
+           embed false ()
          in
          
          push_verbose (track_embedding ()) (fun () ->

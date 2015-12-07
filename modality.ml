@@ -242,7 +242,7 @@ type situation =
   | InU of formula
   | InSofar of formula
 
-let embed bcxt cxt orig_f = 
+let embed is_stabq bcxt cxt orig_f = 
 
   (* I used to be defensive about hatting and hooking (There and Was). Now I'm not. It shouldn't happen that you get There+Was;
      it shouldn't happen that you get There inside There or Was inside Was. But if the first happens I'll ignore it; if the 
@@ -253,9 +253,10 @@ let embed bcxt cxt orig_f =
     let noisy = !Settings.verbose_modality in
     if noisy then Printf.printf "\ntsf formula is %s" (string_of_formula f);
     let _recFint_of_tc tc =
-      match tc with 
-      | Here  -> _recFint (string_of_int tn) 
-      | There -> _recFint (string_of_int ((tn+1) mod !Thread.threadcount))
+      match tc, is_stabq with 
+      | Here , _     -> _recFint (string_of_int tn) 
+      | There, true  -> _recFint (string_of_int ((tn+1) mod !Thread.threadcount))
+      | There, false -> _recFint (string_of_int (-1)) (* specially for Latest *)
     in
     let tcformula_of_tc tc = 
       match tcopt with
@@ -299,7 +300,9 @@ let embed bcxt cxt orig_f =
         embedvariable cxt tcf epf v vtype
     in
     match f.fnode with
-    | Fvar (_,_,v) when NameSet.mem v bounds ->
+    | Fvar (_,_,v) 
+       when NameSet.mem v bounds 
+         || Stringutils.ends_with v "&new" ->
         None
     | Latest (_,_,v) when NameSet.mem v bounds ->
         None
@@ -480,7 +483,7 @@ let embed_axiom types cxt axiom =
     let cxt, axbinders = 
       completed_typeassign_formula_list (vbinders @ mfilter cxt) [] Bool [axiom]
     in
-    let cxt, axiom = embed axbinders cxt axiom in
+    let cxt, axiom = embed false axbinders cxt axiom in
     mfilter cxt, bindForall cfrees axiom::fs
   in
   List.fold_left handle (cxt, []) types 
