@@ -57,14 +57,18 @@ let bo_stable_query assertion irec =
 let bo_stable_query_intfdesc assertion intfdesc =
   bo_stable_query assertion (Intfdesc.irec intfdesc)
 
-let bo_stable_query_irecs intf1 intf2 =
-  let assertion = intf1.i_pre in
-  let assign1 = intf1.i_assign in
+let bo_stable_query_irecs irec1 irec2 =
+  let assertion = strip_latest irec1.i_pre in
+  let assign1 = irec1.i_assign in
   let assertion = if Assign.is_storeconditional assign1 
-                  then conjoin [assertion; _recLatest Here Now (Location.locv (Assign.reserved assign1))]
+                  then conjoin [assertion; 
+                                _recLatest Here Now 
+                                           (Location.locv (Assign.reserved assign1))
+                                           (Assign.conditionally_stored assign1)
+                               ]
                   else assertion
   in
-  bo_stable_query (bindExists intf1.i_binders assertion) intf2
+  bo_stable_query (bindExists irec1.i_binders assertion) irec2
               
 let ext_stable_queries = ext_stable_checks true
 
@@ -75,17 +79,36 @@ let uo_stable_checks assertion irec =
   let instance = Intfdesc.irec_instance (Formula.frees assertion) irec in
   let uo_sp_check =
     let hatted_p = hatted true assertion in
-    _recImplies (strongest_post true
-                                (conjoin [hatted_p; instance.i_pre])
-                                instance.i_assign
-                )
-                hatted_p
+    let assign = instance.i_assign in
+    let sp = strongest_post true (conjoin [hatted_p; instance.i_pre]) assign in
+    let sp = if Assign.is_storeconditional assign 
+             then conjoin [sp; _recLatest Here Now 
+                                          (Location.locv (Assign.reserved assign))
+                                          (Assign.conditionally_stored assign)
+                          ]
+             else sp
+    in _recImplies sp hatted_p
   in
   sat_query (conjoin [assertion; instance.i_pre]), uo_sp_check
 
 let uo_stable_queries_intfdesc assertion intfdesc =
   uo_stable_checks assertion (Intfdesc.irec intfdesc)
 
+(* this is for inflight *)
+let uo_stable_query_irecs irec1 irec2 =
+  let assertion = strip_latest irec1.i_pre in
+  let assign1 = irec1.i_assign in
+  let assertion = if Assign.is_storeconditional assign1 
+                  then conjoin [assertion; 
+                                _recLatest Here Now 
+                                           (Location.locv (Assign.reserved assign1))
+                                           (Assign.conditionally_stored assign1)
+                               ]
+                  else assertion
+  in
+  let satq, stabq = uo_stable_checks (bindExists irec1.i_binders assertion) irec2 in
+  stabq
+              
 let uo_stable_internal assertion irec =
   sndof2 (uo_stable_checks assertion irec)
   

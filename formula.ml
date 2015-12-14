@@ -24,7 +24,6 @@ and formulanode =
   | Fbool        of bool
   | Freg         of reg
   | Fvar         of timecone * epoch * var
-  | Latest       of timecone * epoch * var
   | Flogc        of logc
   | Negarith     of formula
   | Arith        of formula * arithop * formula
@@ -40,6 +39,7 @@ and formulanode =
   | Since        of timecone * epoch * formula * formula        
   | Bfr          of timecone * epoch * formula                  
   | Univ         of epoch * formula 
+  | Latest       of timecone * epoch * var * formula
   | Sofar        of timecone * epoch * formula
   
   | Cohere       of var * formula * formula (* it's a global relation ... but embedding is subtle *)
@@ -117,7 +117,7 @@ let _App       n fs        = App (n,fs)
 let _Sofar     tc ep f     = Sofar (tc,ep,f)
 let _Cohere    v f1 f2     = Cohere (v,f1,f2)
 let _Threaded  tid f       = Threaded (tid,f)
-let _Latest    tc ep v     = Latest (tc,ep,v)
+let _Latest    tc ep v f   = Latest (tc,ep,v,f)
 
 (* let _At_int i = At_int i *)
 
@@ -192,7 +192,7 @@ let _recCohere = _frec <...> _Cohere
 
 let _recThreaded = _frec <..> _Threaded
 
-let _recLatest = _frec <...> _Latest
+let _recLatest = _frec <....> _Latest
 
 (* ********************* replacing fnodes ********************** *)
 
@@ -273,6 +273,9 @@ let is_recBfr f = is_Bfr f.fnode
 
 let is_U = function Univ _ -> true | _ -> false
 let is_recU f = is_U f.fnode
+
+let is_Latest = function Latest _ -> true | _ -> false
+let is_recLatest f = is_Latest f.fnode
 
 let is_Since = function Since _ -> true | _ -> false
 let is_recSince f = is_Since f.fnode
@@ -552,7 +555,9 @@ let rec string_of_primary f =
       | Cohere (v,f1,f2)       -> cohere_token ^ "(" ^ string_of_var v ^ "," ^ string_of_args [f1;f2] ^ ")"
       | ArraySel (af,ixf)      -> let afprio = formulaprio af in
                                   bracket_left afprio arrayselprio af ^ "[" ^ string_of_formula ixf ^ "]"
-      | Latest (tc,ep,v)       -> string_of_tc tc ^ string_of_ep ep ^ m_Latest_token ^ "(" ^ string_of_var v ^ ")"
+      | Latest (tc,ep,v,f)     -> string_of_tc tc ^ string_of_ep ep ^ m_Latest_token ^ "(" 
+                                  ^ string_of_var v ^ "=" 
+                                  ^ bracket_right (compprio Equal) (formulaprio f) f ^ ")"
       | _                      -> bracketed_string_of_formula f
 
 and bracketed_string_of_formula f = "(" ^ string_of_formula f ^ ")"
@@ -597,8 +602,9 @@ and string_of_formula f =
        | Some (_,_,cseq)        -> string_of_cseq cseq
        | None                   -> string_of_binary_formula left right (string_of_logop     lop) (logprio lop)
       ) 
-  | Since (Here, Now, left, right)  -> string_of_binary_formula left right (" " ^ since_token ^ " ") (formulaprio f)
-  | Since (tc, ep, left, right)     -> string_of_tc tc ^ string_of_ep ep ^ bracketed_string_of_formula {f with fnode=Since(Here,Now,left,right)}
+  | Since (Here, Now, left, right) -> string_of_binary_formula left right (" " ^ since_token ^ " ") (formulaprio f)
+  | Since (tc, ep, left, right) -> string_of_tc tc ^ string_of_ep ep ^ 
+                                   bracketed_string_of_formula {f with fnode=Since(Here,Now,left,right)}
   | Threaded (tid,tf)           -> string_of_binary_formula tf (formula_of_threadid tid) "@" (formulaprio f)
   | Tuple fs                    -> string_of_args fs
   | ArrayStore(af,ixf,vf)       -> bracket_left (formulaprio af) arraystoreprio af 
@@ -703,7 +709,7 @@ let indented_string_of_formula just_log indent f =
       | Freg         _
       | Fvar         _
       | Flogc        _         -> true
-      (* these could come apart, but come on! *)
+      (* these could come apart, but I'm too lazy *)
       | Latest       _         -> true
       (* these stay together, unless we want them apart or they are too wide *)
       | Negarith       _ 
@@ -878,8 +884,7 @@ let optexists (optp: formula -> 'a option) f =
       | Fbool    _
       | Freg     _
       | Fvar     _            
-      | Flogc    _            
-      | Latest   _            -> None
+      | Flogc    _            -> None
       | Negarith f 
       | Not      f            -> ef f
       | Arith     (f1,_,f2)
@@ -893,7 +898,8 @@ let optexists (optp: formula -> 'a option) f =
       | Since     (_,_,f1,f2) -> optfirst ef [f1;f2]
       | Bfr       (_,_,f)     -> ef f
       | Univ      (_,f)       -> ef f
-      | Fandw       (_,f)       -> ef f
+      | Latest    (_,_,_,f)   -> ef f
+      | Fandw       (_,f)     -> ef f
       | App       (_,fs)      -> optfirst ef fs (* really: catch it in p if n matters *)
       | Sofar      (_,_,f)    -> ef f
       | Cohere      (_,f1,f2) -> optfirst ef [f1;f2] (* catch v in p if it matters *)
@@ -915,8 +921,7 @@ let optfold (optp: 'a -> formula -> 'a option) x =
         | Fbool    _
         | Freg     _
         | Fvar     _            
-        | Flogc    _            
-        | Latest   _            -> None
+        | Flogc    _            -> None
         | Negarith  f
         | Not       f           -> ofold x f
         | Arith     (f1,_,f2)
@@ -930,7 +935,8 @@ let optfold (optp: 'a -> formula -> 'a option) x =
         | Since     (_,_,f1,f2) -> optfold ofold x [f1;f2]
         | Bfr       (_,_,f)     -> ofold x f
         | Univ      (_,f)       -> ofold x f
-        | Fandw       (_,f)       -> ofold x f
+        | Latest    (_,_,_,f)   -> ofold x f
+        | Fandw       (_,f)     -> ofold x f
         | App       (n,fs)      -> optfold ofold x fs (* really!: catch the appname in optp if n matters *)
         | Sofar     (_,_,f)     -> ofold x f
         | Cohere      (_,f1,f2) -> optfold ofold x [f1;f2] (* catch v in optp if it matters *)
@@ -957,8 +963,7 @@ let optmap ff f =
                           | Fbool    _
                           | Freg     _
                           | Fvar     _            
-                          | Flogc    _            
-                          | Latest   _            -> None
+                          | Flogc    _            -> None
                           | Negarith f            -> trav f &~~ take1 _Negarith
                           | Not      f            -> trav f &~~ take1 _Not
                           | Arith    (f1,op,f2)   -> trav2 f1 f2 &~~ take2 (revargs _Arith op) 
@@ -972,7 +977,8 @@ let optmap ff f =
                           | Since    (tc,ep,f1,f2)-> trav2 f1 f2 &~~ take2 (_Since tc ep)
                           | Bfr      (tc,ep,f)    -> trav f &~~ take1 (_Bfr tc ep)
                           | Univ     (ep,f)       -> trav f &~~ take1 (_Univ ep)
-                          | Fandw      (ep,f)       -> trav f &~~ take1 (_Fandw ep)
+                          | Latest   (tc,ep,v,f)  -> trav f &~~ take1 (_Latest tc ep v)
+                          | Fandw      (ep,f)     -> trav f &~~ take1 (_Fandw ep)
                           | App      (n,fs)       -> optmap_any trav fs &~~ take1 (_App n)
                           | Sofar    (tc,ep,f)    -> trav f &~~ take1 (_Sofar tc ep)
                           | Cohere   (v,f1,f2)    -> trav2 f1 f2 &~~ take2 (_Cohere v)
@@ -1026,8 +1032,7 @@ let optmapfold ff x f =
                        | Fbool     _
                        | Freg      _
                        | Fvar      _            
-                       | Flogc     _          
-                       | Latest    _          -> x,None
+                       | Flogc     _          -> x,None
                        | Negarith  f          -> unary f _recNegative
                        | Not       f          -> unary f negate
                        | Arith     (f1,op,f2) -> binary f1 f2 (revargs _recArith op)
@@ -1041,7 +1046,8 @@ let optmapfold ff x f =
                        | Since  (tc,ep,f1,f2) -> binary f1 f2 (_recSince tc ep)
                        | Bfr       (tc,ep,f)  -> unary f (_recBfr tc ep)
                        | Univ      (ep,f)     -> unary f (_recUniv ep)
-                       | Fandw       (ep,f)     -> unary f (_recFandw ep)
+                       | Latest   (tc,ep,v,f) -> unary f (_recLatest tc ep v)
+                       | Fandw     (ep,f)     -> unary f (_recFandw ep)
                        | App       (n,fs)     -> nary fs (_recApp n)
                        | Sofar     (tc,ep,f)  -> unary f (_recSofar tc ep)
                        | Cohere     (v,f1,f2) -> binary f1 f2 (_recCohere v)
@@ -1138,13 +1144,23 @@ let is_hatted f =
   | Fvar         (There, _, _) 
   | Since        (There, _, _, _)        
   | Bfr          (There, _, _)                  
-  | Sofar        (There, _, _)    -> true
+  | Sofar        (There, _, _)    
+  | Latest       (There, _, _,_)  -> true
   | _                             -> false
+
+let is_hooked f =
+  match f.fnode with
+  | Fvar         (_, Was, _) 
+  | Since        (_, Was, _, _)        
+  | Bfr          (_, Was, _)                  
+  | Sofar        (_, Was, _)    
+  | Latest       (_, Was, _,_)  -> true
+  | _                           -> false
 
 (* *********************** free names ******************************* *)
 
-(* After a good deal of faffing, this has gone back to the obvious. It doesn't bind
-   App names: otherwise everything. Especially the v in Cohere.
+(* After a good deal of faffing, this has gone back to the obvious. It doesn't notice
+   App names: otherwise everything. Especially the v in Cohere and in latest.
  *)
 let rec fof frees f =
   let optf frees f = 
@@ -1156,6 +1172,7 @@ let rec fof frees f =
                                Some (NameSet.union frees (subtractname n bfrees))
     | App    (_,fs)         -> Some (List.fold_left fof frees fs) 
     | Cohere (v,f1,f2)      -> Some (List.fold_left fof (addname v frees) [f1;f2])
+    | Latest (_,_,v,f)      -> Some (fof (addname v frees) f)
     | _                     -> None
   in
   (revargs (optfold optf) f ||~ id) frees

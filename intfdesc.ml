@@ -127,6 +127,11 @@ let frees intfdesc =
   let frees = Formula.fof (Assign.frees (assign intfdesc)) (pre intfdesc) in
   NameSet.diff frees (binders intfdesc)
 
+let pre_frees intfdesc =
+  NameSet.diff (Formula.frees (pre intfdesc)) (binders intfdesc)
+  
+let assign_frees intfdesc =
+  NameSet.diff (Assign.frees (assign intfdesc)) (binders intfdesc) 
 let irec_instance captures irec =
   let default () = {irec with i_binders=NameSet.empty} in
   if not (is_var_assign (irec.i_assign)) then default ()

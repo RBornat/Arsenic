@@ -37,27 +37,47 @@ open Assign
       
    ************************************************************************** *)
 
-let hatted bfr_too =
+let hatted bfr_too orig_f=
   let rec opt_hat binders f =
     match f.fnode with
     | Fvar(Here,Now,v)          -> if NameSet.mem v binders then None else Some (_recFvar There Now v)
     | Bfr(Here,Now,bf)          -> if bfr_too then Some (_recBfr There Now bf)
                                    else Some f (* don't touch it! *) 
     | Univ (Now,_)              -> Some f (* don't touch it! *)
+    | Latest (Here,Now,v,lf)    -> Some (_recLatest There Now v (anyway (ohat binders) lf))
     | Sofar (Here,Now,sf)       -> Some (_recSofar There Now sf)
     | Since (Here,Now,f1,f2)    -> Some (_recSince There Now f1 f2)
-    | Binder (bk,n,bf)          -> (Formula.optmap (opt_hat (NameSet.add n binders)) &~ (_Some <.> _recBinder bk n)) bf 
+    | Binder (bk,n,bf)          -> (ohat (NameSet.add n binders) &~ (_Some <.> _recBinder bk n)) bf 
                                    |~~ (fun () -> Some f) (* sorry, but this is essential: 
                                                              bound variables can't be hatted
                                                            *)
     | Fvar    _           
     | Bfr     _           
     | Univ    _        
-    | Since   _                 -> raise (Invalid_argument ("Stability.hatted.opt_hat " ^ string_of_formula f))
+    | Latest  _        
+    | Since   _                 -> raise (Invalid_argument (Printf.sprintf "Strongestpost.hatted.opt_hat %s in %s" 
+                                                                           (string_of_formula f)
+                                                                           (string_of_formula orig_f)
+                                                           )
+                                         )
     | _                         -> None
-  and hat binders = Formula.map (opt_hat binders)
+  and ohat binders = Formula.optmap (opt_hat binders)
   in
-  hat NameSet.empty
+  Formula.map (opt_hat NameSet.empty) orig_f
+
+(* in in-flight stability checks, we don't allow latest. I think this is what I mean *)
+let rec strip_latest orig_f =
+  let doit f = 
+    match f.fnode with
+    | Latest (Here,Now,v,lf) -> Some (_recEqual (_recFname v) (strip_latest lf))
+    | Latest _               -> raise (Invalid_argument (Printf.sprintf "Strongestpost.strip_latest %s in %s"
+                                                                        (string_of_formula f)
+                                                                        (string_of_formula orig_f)
+                                                        )
+                                      )
+    | _                      -> None
+  in
+  Formula.map doit orig_f
   
 let optsp_substitute mapping orig_f =
   let isvarmapping mapping f = 
@@ -96,12 +116,17 @@ let optsp_substitute mapping orig_f =
                                  |~~ (fun () -> Some f) (* sorry, but this is essential: bf can't be
                                                            substituted with the original mapping
                                                          *)
-    | Bfr (There,Now,bf)      -> Some f
     | Bfr (Here,Now,bf)       -> domodality false (_recBfr Here) bf
+    | Bfr (There,Now,bf)      -> Some f
     | Univ (Now,uf)           -> domodality true _recUniv uf
-    | Sofar (There,Now, sf)   -> Some f
+    | Latest (Here,Now,v,lf)  -> if List.mem_assoc v mapping then 
+                                   Some (_recLatest Here Was v (anyway (subopt mapping) lf))
+                                 else 
+                                   (subopt mapping) lf
+                                   &~~ (_Some <.> _recLatest Here Now v)
+    | Latest (There,Now,v,lf) -> Some f
     | Sofar (Here,Now, sf)    -> domodality false (_recSofar Here) sf
-    | Since (There,Now,f1,f2)-> Some f
+    | Sofar (There,Now, sf)   -> Some f
     | Since (Here,Now,f1,f2) -> (if isvarmapping mapping f then
                                     optionpair_either (subopt mapping) f1 (subopt mapping) f2
                                     &~~ (fun (f1',_) -> Some (conjoin [_recSince Here Was f1 f2; f1']))
@@ -110,9 +135,11 @@ let optsp_substitute mapping orig_f =
                                     &~~ (fun (f1,f2) -> Some (_recSince Here Now f1 f2))
                                  )
                                  |~~ (fun () -> Some f)
+    | Since (There,Now,f1,f2)-> Some f
     | Fvar      _
     | Bfr       _           
     | Univ      _            
+    | Latest    _            
     | Sofar     _             
     | Since     _             -> raise (Invalid_argument (Printf.sprintf "sp_substitute [%s] %s, which contains %s" 
                                                                          (string_of_assoc string_of_name string_of_formula "->" ";" mapping)

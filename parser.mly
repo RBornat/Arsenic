@@ -75,6 +75,7 @@
       | Since      _   
       | Bfr        _      
       | Univ       _      
+      | Latest     _      
       | Cohere     _     
       | Threaded   _       -> Some (f::badfs, set)
       | _                  -> None
@@ -346,10 +347,9 @@
          | _      , true , StoreConditional -> bad ("store-conditional operator " ^ string_of_synchro synchro ^
                                                     " used in multi-location assignment"
                                                    ) 
-         | _      , false, StoreConditional -> true (* bad ("store-conditional operator " ^ string_of_synchro synchro ^
-                                                            " used in interference assignment"
-                                                           )
-                                                     *)
+         | _      , false, StoreConditional -> bad ("store-conditional operator " ^ string_of_synchro synchro ^
+                                                    " used in interference assignment"
+                                                   )
          | _      , _    , LoadLogical      -> bad ("load-logical operator " ^ string_of_synchro synchro ^
                                                     " used in location assignment"
                                                    )
@@ -893,8 +893,10 @@ condition:
   | preknot ipreopt loclabel COLON conditionthing       
                                         { match $5 with
                                           | CTAssign (locs, op, es) ->
-                                              let assign = Assign (check_conditional_assign (locs, op, es)) in
-                                              let scomnode = simplecomadorn $2 assign in
+                                              let assign = check_conditional_assign (locs, op, es) in
+                                              if Assign.is_reg_assign assign && $2!=None then
+                                                bad "register assign with interference precondition";
+                                              let scomnode = simplecomadorn $2 (Assign assign) in
                                               CAssign (tripletadorn $1 $3 scomnode) 
                                           | CTExpr e ->
                                               if $2=None then 
@@ -921,8 +923,9 @@ primary:
   | tcep OUAT LPAR formula RPAR         {let tc, ep = $1 in
                                          fadorn (ouat tc ep $4).fnode
                                         }
-  | tcep LATEST LPAR latestname RPAR    { let tc, ep = $1 in
-                                          fadorn (Latest (tc,ep,$4))
+  | tcep LATEST LPAR latestname EQUAL formula RPAR   
+                                        { let tc, ep = $1 in
+                                          fadorn (Latest (tc,ep,$4,$6))
                                         }
 /*
   | epoch USOFAR LPAR formula RPAR      {fadorn (Univ ($1, fadorn (Sofar (Here, Now, $4))))}

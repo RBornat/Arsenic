@@ -86,6 +86,14 @@ let reserved = function
   | RsbecomeLocs (true, ((_,loc)::_)) -> loc
   | a                                 -> raise (Invalid_argument ("Assign.reserved " ^ string_of_assign a))
       
+let logically_loaded = function
+  | RsbecomeLocs (true, ((rs,loc)::_)) -> singleton_or_tuple (List.map _recFname rs)
+  | a                                  -> raise (Invalid_argument ("Assign.logically_loaded " ^ string_of_assign a))
+      
+let conditionally_stored = function
+  | LocbecomesEs (true, ((loc,e)::_)) -> e
+  | a                                 -> raise (Invalid_argument ("Assign.conditionally_stored " ^ string_of_assign a))
+      
 let loces = function
   | LocbecomesEs (b,loces) -> loces
   | assign                 -> raise (Invalid_argument ("Assign.loces " ^ string_of_assign assign))

@@ -258,7 +258,7 @@ let embed is_stabq bcxt cxt orig_f =
       | There, true  -> _recFint (string_of_int ((tn+1) mod !Thread.threadcount))
       | There, false -> _recFint (string_of_int (-1)) (* specially for Latest *)
     in
-    let tcformula_of_tc tc = 
+    let formula_of_tc tc = 
       match tcopt with
       | Some tcf -> tcf
       | _        -> _recFint_of_tc tc
@@ -292,9 +292,10 @@ let embed is_stabq bcxt cxt orig_f =
       | None -> cxt, _recTrue
       | _    -> anyway2 (opttsf bounds situation tn tcopt hiopt (hiformula_of_ep ep) bcxt) cxt p
     in
-    (* Printf.printf "\nf %s" (string_of_formula f); *)
+    if !Settings.verbose || !Settings.verbose_modality then
+      Printf.printf "\nembed f %s" (string_of_formula f); 
     let process_var cxt tc ep v f =
-        let tcf = tcformula_of_tc tc in
+        let tcf = formula_of_tc tc in
         let epf = hiformula_of_ep ep in
         let vtype = if v=barrier_event_name then Bool else bcxt <@@> f in
         embedvariable cxt tcf epf v vtype
@@ -304,16 +305,18 @@ let embed is_stabq bcxt cxt orig_f =
        when NameSet.mem v bounds 
          || Stringutils.ends_with v "&new" ->
         None
-    | Latest (_,_,v) when NameSet.mem v bounds ->
-        None
+    | Latest (tc,ep,v,lf) when NameSet.mem v bounds -> (* just v=lf ... *)
+        let cxt, lf = anyway2 (opttsf bounds situation tn tcopt hiopt hicurr bcxt) cxt lf in
+        Some (cxt, Some (_recEqual (_recFname v) lf))
     | Fvar (tc,ep,v) ->
         let cxt, vv = process_var cxt tc ep v f in
         Some (cxt, Some vv)
-    | Latest (tc,ep,v) ->
-        (* Latest won't be quantified, I hope. But it can be hatted or hooked *)
+    | Latest (tc,ep,v,lf) -> 
         let cxt, v1 = process_var cxt tc ep v f in
         let cxt, v2 = process_var cxt There Now v f in
-        Some (cxt, Some (_recEqual v1 v2))
+        (* tc, ep apply only to v: lf is hatted and hooked appropriately *)
+        let cxt, lf = anyway2 (opttsf bounds situation tn tcopt hiopt hicurr bcxt) cxt lf in
+        Some (cxt, Some (conjoin [_recEqual v1 lf; _recEqual v1 v2]))
     | Flogc s when NameSet.mem s bounds ->
         None
     | Flogc s ->
