@@ -15,9 +15,9 @@ while bb:true do
         {* lo a: loopinv *}                                         b:r1,raux_,rauxC :=* lock
     until {* lo b: loopinv *}                                   cc:r1=0;
     
-    if {* lo b *lock(t): r1=0=>lock=(0,raux_,rauxC);
+    if {* lo b *lock(t): r1=0=>latest(lock=(0,raux_,rauxC));
           lo cc(t): r1=0 /\ loopinv *}
-       (*[* *: _B(tk>=rauxC)/\(latest(lock=(0,raux_,rauxC))=>_B(tk=rauxC)) *]*)
+       [* *: latest(lock=(0,raux_,rauxC)) *]
                                                                 dd: lock *:= 1,0,rauxC
     then  
         {* lo dd(t): latest(lock=(1,0,rauxC))/\_B(tk=rauxC) *}      c: r2:=tk;

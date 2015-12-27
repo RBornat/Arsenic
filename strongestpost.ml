@@ -36,17 +36,42 @@ open Assign
       (P since Q)[varmapping = (-)(P since Q) /\ P[varmapping]
       
    ************************************************************************** *)
+(* three kinds of stability, three kinds of hatting.
 
-let hatted bfr_too orig_f=
+    ExtHat     : variables outside Bfr, Univ, Latest;
+    UExtHat    : variables outside Univ, Latest (and hat Bfr nodes as well);
+    InflightHat: variables and Latest outside Bfr, Univ
+    
+    and NoHat for completeness
+    
+ *)
+ 
+type hatting = NoHat | ExtHat | UExtHat | InflightHat
+
+let string_of_hatting = function
+  | NoHat       -> "NoHat"
+  | ExtHat      -> "ExtHat"
+  | UExtHat     -> "UExtHat"
+  | InflightHat -> "InflightHat"
+
+let hatted hatting orig_f =
   let rec opt_hat binders f =
     match f.fnode with
     | Fvar(Here,Now,v)          -> if NameSet.mem v binders then None else Some (_recFvar There Now v)
-    | Bfr(Here,Now,bf)          -> if bfr_too then Some (_recBfr There Now bf)
+    | Bfr (Here,Now,bf)         -> if hatting=UExtHat 
+                                   then Some (_recBfr There Now (hat binders bf))
                                    else Some f (* don't touch it! *) 
-    | Univ (Now,_)              -> Some f (* don't touch it! *)
-    | Latest (Here,Now,v,lf)    -> Some (_recLatest There Now v (anyway (ohat binders) lf))
-    | Sofar (Here,Now,sf)       -> Some (_recSofar There Now sf)
-    | Since (Here,Now,f1,f2)    -> Some (_recSince There Now f1 f2)
+    | Univ (Now,uf)             -> (* Univ holds everywhere. So in particular it holds hatted. 
+                                      If it gets hooked, then we miss the There, Now case. 
+                                      So we add it here (if it's unnecessary, so what?).
+                                      Please be right ...
+                                    *)
+                                   Some (conjoin [f; hat binders uf])
+    | Latest (Here,Now,v)       -> if hatting=InflightHat 
+                                   then Some (_recLatest There Now v)
+                                   else Some f (* don't touch it! *)
+    | Sofar (Here,Now,sf)       -> Some (_recSofar There Now sf)    (* is the place parameter just laziness? *)
+    | Since (Here,Now,f1,f2)    -> Some (_recSince There Now f1 f2) (* is the place parameter just laziness? *)
     | Binder (bk,n,bf)          -> (ohat (NameSet.add n binders) &~ (_Some <.> _recBinder bk n)) bf 
                                    |~~ (fun () -> Some f) (* sorry, but this is essential: 
                                                              bound variables can't be hatted
@@ -55,30 +80,18 @@ let hatted bfr_too orig_f=
     | Bfr     _           
     | Univ    _        
     | Latest  _        
-    | Since   _                 -> raise (Invalid_argument (Printf.sprintf "Strongestpost.hatted.opt_hat %s in %s" 
+    | Since   _                 -> raise (Invalid_argument (Printf.sprintf "Strongestpost.hatted.opt_hat %s in %s %s" 
                                                                            (string_of_formula f)
+                                                                           (string_of_hatting hatting)
                                                                            (string_of_formula orig_f)
                                                            )
                                          )
     | _                         -> None
   and ohat binders = Formula.optmap (opt_hat binders)
+  and hat binders = Formula.map (opt_hat binders)
   in
-  Formula.map (opt_hat NameSet.empty) orig_f
+  if hatting=NoHat then orig_f else Formula.map (opt_hat NameSet.empty) orig_f
 
-(* in in-flight stability checks, we don't allow latest. I think this is what I mean *)
-let rec strip_latest orig_f =
-  let doit f = 
-    match f.fnode with
-    | Latest (Here,Now,v,lf) -> Some (_recEqual (_recFname v) (strip_latest lf))
-    | Latest _               -> raise (Invalid_argument (Printf.sprintf "Strongestpost.strip_latest %s in %s"
-                                                                        (string_of_formula f)
-                                                                        (string_of_formula orig_f)
-                                                        )
-                                      )
-    | _                      -> None
-  in
-  Formula.map doit orig_f
-  
 let optsp_substitute mapping orig_f =
   let isvarmapping mapping f = 
     if List.for_all (Name.is_anyvar <.> fstof2) mapping then true
@@ -91,18 +104,12 @@ let optsp_substitute mapping orig_f =
               ", which contains " ^ string_of_formula f))
   in
   let rec optsub mapping f = 
-    let domodality isU mm mf =
+    let domodality mm mf =
       (subopt mapping 
        &~ (fun mf' -> 
-             if isvarmapping mapping f then
-               (Some (conjoin [mm Was mf; 
-                               mf'; 
-                               if isU then anyway (subopt mapping) (hatted true mf) else _recTrue
-                              ]
-                     )
-               )
-             else
-               Some (mm Now mf')
+             if isvarmapping mapping f 
+             then Some (conjoin [mm Then mf; mf'])
+             else Some (mm Now mf')
           )
       ) mf
     in
@@ -111,43 +118,39 @@ let optsp_substitute mapping orig_f =
     (* Flogc omitted deliberately: you can't assign to a logical constant *)
     (* We only substitute for unhooked variables -- Here+Now, There+Now *)
     | Fvar  (Here,Now,v)      -> (try Some (mapping <@> v) with Not_found -> None)
-    | Fvar (There,Now,v)      -> None (* Formula.optmap leaves it alone *)
+    | Fvar (There,Now,v)      -> Some f
     | Binder (bk,n,bf)        -> (subopt (List.remove_assoc n mapping) &~ (_Some <.> _recBinder bk n)) bf 
                                  |~~ (fun () -> Some f) (* sorry, but this is essential: bf can't be
                                                            substituted with the original mapping
                                                          *)
-    | Bfr (Here,Now,bf)       -> domodality false (_recBfr Here) bf
-    | Bfr (There,Now,bf)      -> Some f
-    | Univ (Now,uf)           -> domodality true _recUniv uf
-    | Latest (Here,Now,v,lf)  -> if List.mem_assoc v mapping then 
-                                   Some (_recLatest Here Was v (anyway (subopt mapping) lf))
-                                 else 
-                                   (subopt mapping) lf
-                                   &~~ (_Some <.> _recLatest Here Now v)
-    | Latest (There,Now,v,lf) -> Some f
-    | Sofar (Here,Now, sf)    -> domodality false (_recSofar Here) sf
-    | Sofar (There,Now, sf)   -> Some f
-    | Since (Here,Now,f1,f2) -> (if isvarmapping mapping f then
+    | Bfr (pl,Now,bf)         -> domodality (_recBfr pl) bf
+    | Univ (Now,uf)           -> domodality _recUniv uf
+    | Latest (pl,Now,v)       -> if List.mem_assoc v mapping 
+                                 then Some (_recLatest pl Then v)
+                                 else Some f
+    | Sofar (Here,Now, sf)    -> domodality (_recSofar Here) sf
+    | Sofar (There,Now, sf)   -> Some f (* worried about this *)
+    | Since (Here,Now,f1,f2)  -> (if isvarmapping mapping f then
                                     optionpair_either (subopt mapping) f1 (subopt mapping) f2
-                                    &~~ (fun (f1',_) -> Some (conjoin [_recSince Here Was f1 f2; f1']))
+                                    &~~ (fun (f1',_) -> Some (conjoin [_recSince Here Then f1 f2; f1']))
                                   else
                                     optionpair_either (subopt mapping) f1 (subopt mapping) f2
                                     &~~ (fun (f1,f2) -> Some (_recSince Here Now f1 f2))
                                  )
                                  |~~ (fun () -> Some f)
-    | Since (There,Now,f1,f2)-> Some f
+    | Since (There,Now,f1,f2) -> Some f (* worried about this *)
     | Fvar      _
     | Bfr       _           
     | Univ      _            
     | Latest    _            
     | Sofar     _             
-    | Since     _             -> raise (Invalid_argument (Printf.sprintf "sp_substitute [%s] %s, which contains %s" 
-                                                                         (string_of_assoc string_of_name string_of_formula "->" ";" mapping)
-                                                                         (string_of_formula orig_f) 
-                                                                         (string_of_formula f)
-                                                         )
-                                       )
-    | _                       -> None
+    | Since     _              -> raise (Invalid_argument (Printf.sprintf "sp_substitute [%s] %s, which contains %s" 
+                                                                          (string_of_assoc string_of_name string_of_formula "->" ";" mapping)
+                                                                          (string_of_formula orig_f) 
+                                                                          (string_of_formula f)
+                                                          )
+                                        )
+    | _                        -> None
   and subopt mapping = Formula.optmap (optsub mapping)
   in
   subopt mapping orig_f
@@ -159,7 +162,7 @@ let sp_substitute mapping f =
 let strongest_post with_result pre assign = 
   let decorate f = if with_result then f else _recTrue in
   let old_name name =
-    if Name.is_anyvar name then _recFvar Here Was name
+    if Name.is_anyvar name then _recFvar Here Then name
                            else _recFname (name ^ "!old")
   in
   let sp_multiple is_varsubst mapping locs es = 
@@ -194,7 +197,7 @@ let strongest_post with_result pre assign =
         let vars = mvs pre in
         let unchanged = NameSet.diff vars (NameSet.of_list (List.map fstof2 mapping)) in
         conjoin (List.map (fun v -> _recEqual (_recFvar Here Now v)
-                                              (_recFvar Here Was v)
+                                              (_recFvar Here Then v)
                           )
                           (NameSet.elements unchanged)
                 )

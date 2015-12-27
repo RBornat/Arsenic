@@ -385,21 +385,21 @@
     | (loc,n)::locnames -> let f = makebinder bindf locnames f in
                            Formula.fadorn (spos_of_sposspos loc f.fpos) (bindf n f)
                            
-  let tcep_apply tc ep f =
+  let tcep_apply pl wh f =
     let wrong s =
       bad ("can't apply " ^ s ^ " to (" ^ string_of_formula f ^ ")")
     in
     match f.fnode with
-    | Fvar  (Here,Now,v)     -> {f with fnode=Fvar (tc,ep,v)}
-    | Since (Here,Now,f1,f2) -> {f with fnode=Since(tc,ep,f1,f2)}
-    | Bfr   (Here,Now,bf)    -> {f with fnode=Bfr(tc,ep,bf)}
-    | Univ  (Now,uf)         -> (match tc with 
-                                 | Here -> {f with fnode=Univ(ep,uf)}
+    | Fvar  (Here,Now,v)     -> {f with fnode=Fvar (pl,wh,v)}
+    | Since (Here,Now,f1,f2) -> {f with fnode=Since(pl,wh,f1,f2)}
+    | Bfr   (Here,Now,bf)    -> {f with fnode=Bfr(pl,wh,bf)}
+    | Univ  (Now,uf)         -> (match pl with 
+                                 | Here -> {f with fnode=Univ(wh,uf)}
                                  | _    -> wrong "(^)"
                                 )
-    | _                      -> (match tc,ep with
+    | _                      -> (match pl,wh with
                                  | Here, Now -> f
-                                 | _ -> wrong (string_of_tc tc ^ string_of_ep ep)
+                                 | _ -> wrong (string_of_pl pl ^ string_of_wh wh)
                                 )
       
   let check_knot knot =
@@ -790,12 +790,12 @@ scomnode:
                                           Assign a
                                         }
     
-/* for some reason this doesn't work if I use timecone and epoch or even tcep */
+/* for some reason this doesn't work if I use place and time or even tcep */
 fname:
   | LPAR MINUS RPAR NAME                { if NameMap.mem $4 !macros then
                                             bad ("macro_expand name " ^ string_of_name $4 ^ " follows (-)")
                                           else
-                                          if is_anyvar $4 then fadorn (Fvar (Here,Was,$4)) 
+                                          if is_anyvar $4 then fadorn (Fvar (Here,Then,$4)) 
                                           else
                                             bad (string_of_name $4 ^
                                                  " should be variable in order to follow (-)"
@@ -821,14 +821,14 @@ fname:
                                         }
   | PMSREG                              { fadorn (classify_var $1) }
 
-timecone:
+place:
   | LPAR HAT RPAR                       {if !Settings.allow_tcep then There
                                          else bad "(^) not allowed in assertions or formulae"
                                         }
   |                                     {Here}
   
-epoch:
-  | LPAR MINUS RPAR                     {if !Settings.allow_tcep then Was
+time:
+  | LPAR MINUS RPAR                     {if !Settings.allow_tcep then Then
                                          else bad "(-) not allowed in assertions or formulae"
                                         }
   |                                     {Now}
@@ -849,7 +849,7 @@ tcep:
   | LPAR HAT RPAR                       {if !Settings.allow_tcep then There, Now
                                          else bad "(^) not allowed in assertions or formulae"
                                         }
-  | LPAR MINUS RPAR                     {if !Settings.allow_tcep then Here, Was
+  | LPAR MINUS RPAR                     {if !Settings.allow_tcep then Here, Then
                                          else bad "(-) not allowed in assertions or formulae"
                                         }
   |                                     {Here, Now}
@@ -917,18 +917,17 @@ primary:
   | primary SQBRA formula SQKET         {fadorn (ArraySel($1,$3)) } /* pureness gets checked elsewhere ... */
   | MINUS primary                       {fadorn(Negarith($2))} 
   | NOT primary                         {fadorn(Not($2))}
-  | tcep SOFAR LPAR formula RPAR        {let tc, ep = $1 in
-                                         fadorn (Sofar (tc, ep, $4))
+  | tcep SOFAR LPAR formula RPAR        {let pl, wh = $1 in
+                                         fadorn (Sofar (pl, wh, $4))
                                         }
-  | tcep OUAT LPAR formula RPAR         {let tc, ep = $1 in
-                                         fadorn (ouat tc ep $4).fnode
+  | tcep OUAT LPAR formula RPAR         {let pl, wh = $1 in
+                                         fadorn (ouat pl wh $4).fnode
                                         }
-  | tcep LATEST LPAR latestname EQUAL formula RPAR   
-                                        { let tc, ep = $1 in
-                                          fadorn (Latest (tc,ep,$4,$6))
-                                        }
+  | tcep LATEST LPAR latestname RPAR   
+                                        { let pl, wh = $1 in
+                                          fadorn (Latest (pl,wh,$4)) }
 /*
-  | epoch USOFAR LPAR formula RPAR      {fadorn (Univ ($1, fadorn (Sofar (Here, Now, $4))))}
+  | time USOFAR LPAR formula RPAR      {fadorn (Univ ($1, fadorn (Sofar (Here, Now, $4))))}
  */
   
   | COHERE LPAR name COMMA formula COMMA formula RPAR
@@ -950,8 +949,8 @@ primary:
                                         }   
  */
   
-  | timecone LPAR formula RPAR          {tcep_apply $1 Now $3}
-  | epoch LPAR formula RPAR             {tcep_apply Here $1 $3}
+  | place LPAR formula RPAR          {tcep_apply $1 Now $3}
+  | time LPAR formula RPAR             {tcep_apply Here $1 $3}
   
 /* we're parsing Apps now, but the only use is for macro_expand macros */
   | NAME LPAR formulalist RPAR          { match macro_expand $1 (Some $3) with
@@ -960,11 +959,11 @@ primary:
                                               bad ("undefined macro " ^ string_of_name $1)
                                         }
   
-  | tcep BFR LPAR formula RPAR          {let tc, ep = $1 in
-                                         fadorn (Bfr (tc,ep,$4))
+  | tcep BFR LPAR formula RPAR          {let pl, wh = $1 in
+                                         fadorn (Bfr (pl,wh,$4))
                                         }
-  | epoch UNIV LPAR formula RPAR        {fadorn (Univ ($1,$4))}
-  | epoch FANDW LPAR formula RPAR       {if !Settings.allow_tcep then fadorn (Fandw ($1,$4))
+  | time UNIV LPAR formula RPAR        {fadorn (Univ ($1,$4))}
+  | time FANDW LPAR formula RPAR       {if !Settings.allow_tcep then fadorn (Fandw ($1,$4))
                                          else bad (Formula.m_Fandw_token ^ " not allowed in assertions or formulas")
                                         }
                                         
@@ -1045,7 +1044,7 @@ formula:
   | formula IMPLIES formula             {fadorn(LogArith($1,Implies,$3))}
 
   | formula ARRAYSTORE arraymaps        {let ixf, vf = $3 in fadorn (ArrayStore($1,ixf,vf))} /* pureness gets checked elsewhere */
-  | formula SINCE formula               {fadorn (Since(Here,Now,$1,$3))} /* timecone, epoch done elsewhere */
+  | formula SINCE formula               {fadorn (Since(Here,Now,$1,$3))} /* place, time done elsewhere */
   
   | formula COMMA formulas              {fadorn(Tuple($1::$3))}
 

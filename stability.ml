@@ -29,20 +29,24 @@ let sc_stable_query_intfdesc assertion intfdesc =
   let instance = Intfdesc.instance (Formula.frees assertion) intfdesc in
   sc_stable_query assertion instance.i_pre instance.i_assign
 
-let ext_stable_checks with_scloc assertion irec =   
+(* with different values of hatting, ext_stable_checks/queries does 
+    EXT stable (ExHat)
+    BO stable  (InFlightHat)
+ *)
+let ext_stable_checks with_scloc hatting assertion irec =   
   let instance = Intfdesc.irec_instance (Formula.frees assertion) irec in
   let conjoins = 
     if with_scloc && !Settings.param_SCloc then
       List.map (function VarLoc v         -> let v = _recFname v in
-                                             _recEqual v (hatted false v)
+                                             _recEqual v (hatted hatting v)
                 |        ArrayLoc (v,ixf) -> let v = _recFname v in
                                              let arraysel = _recArraySel v ixf in
-                                             _recEqual arraysel (hatted false arraysel)
+                                             _recEqual arraysel (hatted hatting arraysel)
                )
                (fstof2 (List.split (Assign.loces instance.i_assign)))
     else []
   in
-  let hatted_pre = hatted false instance.i_pre in
+  let hatted_pre = hatted hatting instance.i_pre in
   let ext_sp_check = _recImplies (strongest_post true
                                                  (conjoin (assertion::hatted_pre::conjoins))
                                                  instance.i_assign
@@ -51,40 +55,42 @@ let ext_stable_checks with_scloc assertion irec =
   in
   sat_query (conjoin [assertion; instance.i_pre]), ext_sp_check
 
+let ext_stable_queries = ext_stable_checks true
+
+let ext_stable_queries_intfdesc hatting assertion intfdesc =
+  ext_stable_queries hatting assertion (Intfdesc.irec intfdesc)
+
+(* bo_stable_query does inflight stability. Do we need a different one for uo inflight stability? 
+   I don't think so: overtaking is overtaking.
+ *)  
 let bo_stable_query assertion irec =
-  sndof2 (ext_stable_checks false assertion irec)
+  sndof2 (ext_stable_checks false InflightHat assertion irec)
 
 let bo_stable_query_intfdesc assertion intfdesc =
   bo_stable_query assertion (Intfdesc.irec intfdesc)
 
 let bo_stable_query_irecs irec1 irec2 =
-  let assertion = strip_latest irec1.i_pre in
+  let assertion = irec1.i_pre in
   let assign1 = irec1.i_assign in
   let assertion = if Assign.is_storeconditional assign1 
                   then conjoin [assertion; 
-                                _recLatest Here Now 
-                                           (Location.locv (Assign.reserved assign1))
-                                           (Assign.conditionally_stored assign1)
+                                _recLatest Here Now (Location.locv (Assign.reserved assign1))
                                ]
                   else assertion
   in
   bo_stable_query (bindExists irec1.i_binders assertion) irec2
-              
-let ext_stable_queries = ext_stable_checks true
-
-let ext_stable_queries_intfdesc assertion intfdesc =
-  ext_stable_queries assertion (Intfdesc.irec intfdesc)
   
+(* uo_stable_checks does UEXT stability. It hats things the other way round: assertion
+   is UExtHat hatted.
+ *)
 let uo_stable_checks assertion irec =
   let instance = Intfdesc.irec_instance (Formula.frees assertion) irec in
   let uo_sp_check =
-    let hatted_p = hatted true assertion in
+    let hatted_p = hatted UExtHat assertion in
     let assign = instance.i_assign in
     let sp = strongest_post true (conjoin [hatted_p; instance.i_pre]) assign in
     let sp = if Assign.is_storeconditional assign 
-             then conjoin [sp; _recLatest Here Now 
-                                          (Location.locv (Assign.reserved assign))
-                                          (Assign.conditionally_stored assign)
+             then conjoin [sp; _recLatest Here Now (Location.locv (Assign.reserved assign))
                           ]
              else sp
     in _recImplies sp hatted_p
@@ -94,19 +100,19 @@ let uo_stable_checks assertion irec =
 let uo_stable_queries_intfdesc assertion intfdesc =
   uo_stable_checks assertion (Intfdesc.irec intfdesc)
 
-(* this is for inflight *)
+(* this is for inflight. Do I need this? *)
 let uo_stable_query_irecs irec1 irec2 =
-  let assertion = strip_latest irec1.i_pre in
+  let assertion = irec1.i_pre in
   let assign1 = irec1.i_assign in
   let assertion = if Assign.is_storeconditional assign1 
                   then conjoin [assertion; 
-                                _recLatest Here Now 
-                                           (Location.locv (Assign.reserved assign1))
-                                           (Assign.conditionally_stored assign1)
+                                _recLatest Here Now (Location.locv (Assign.reserved assign1))
                                ]
                   else assertion
   in
-  let satq, stabq = uo_stable_checks (bindExists irec1.i_binders assertion) irec2 in
+  let satq, stabq = 
+    uo_stable_checks (bindExists irec1.i_binders assertion) irec2
+  in
   stabq
               
 let uo_stable_internal assertion irec =

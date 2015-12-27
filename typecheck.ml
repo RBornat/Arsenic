@@ -126,10 +126,7 @@ let rec typeassign_formula cxt bcxt t f =
      | Freg              r -> assigntype cxt t (string_of_reg r), bcxt
      | Fvar      (_, _, v) -> (* for translation to Z3, all variable instances are typed in bcxt (see modality.ml) *)
                               assigntype cxt t (string_of_var v), (f,t)::bcxt
-     | Latest (_, _, v, lf) -> let vtype = new_FTypeVar () in
-                              let cxt = assigntype cxt vtype (string_of_var v) in
-                              let cxt, bcxt = typeassign_formula cxt bcxt vtype lf in
-                              unifytype cxt t Bool, (f,vtype)::bcxt
+     | Latest (_, _, v)    -> assigntype cxt t (string_of_var v), (f,t)::bcxt
      | Flogc             n -> assigntype cxt t (string_of_logc n), bcxt
      | Negarith          f -> unary  cxt bcxt Int  Int  f 
      | Not               f -> unary  cxt bcxt Bool Bool f

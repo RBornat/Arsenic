@@ -76,7 +76,7 @@ module PKSCMap = MyMap.Make (struct type t = pkind * simplecom triplet
 
 (* precondition of each simplecom triplet. Different for load-logical, store-conditional *)
 
-let we_are_latest v = _recLatest Here Now v (_recFname v)
+let we_are_latest v = _recEqual (_recLatest Here Now v) (_recFname v)
 
 let cpre pk ct =
   let defaultpre = precondition_of_knot pk ct.tripletknot in
@@ -294,7 +294,7 @@ let cpost cpre pk ct =
         (* add 'latest' to pre and postcondition *)
         let resloc = Assign.reserved a in
         let resv = Location.locv resloc in
-        let latest_after = _recLatest Here Now resv (Assign.conditionally_stored a) in
+        let latest_after = _recEqual (_recLatest Here Now resv) (Assign.conditionally_stored a) in
         post_of_pre (fun fpre -> conjoin [Strongestpost.strongest_post true (conjoin [fpre; we_are_latest resv]) a; latest_after])
                     (justoneloc ct.tripletpos) 
                     pre
@@ -508,13 +508,13 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
     if NameSet.is_empty (NameSet.inter assigned frees) then
       avoided spos "" (stringfun "external stability check")
     else
-      (let satq, extq = Stability.ext_stable_queries_intfdesc assertion intfdesc in 
+      (let satq, extq = Stability.ext_stable_queries_intfdesc Strongestpost.ExtHat assertion intfdesc in 
        let extq =
          match resopt with
          | Some loc -> let v = List.hd (Intfdesc.assigned_vars intfdesc) in
                        (* v=hook(v)=>extq *)
                        _recImplies (_recEqual (_recFvar Here Now v)
-                                              (_recFvar Here Was v)
+                                              (_recFvar Here Then v)
                                    )
                                    extq
          | None     -> extq
@@ -523,18 +523,18 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
           So we do it the other way round in that case.
         *)
        let ask_uo () =
-         if not (Formula.exists is_recU assertion) then
+         if not (Formula.exists (is_recU <||> is_recLatest) assertion) then
            (avoided spos "Z3 check" (stringfun "UO-EXT stability");
             Valid ([],_recTrue)
            )
          else
            (let _, uoq = Stability.uo_stable_queries_intfdesc assertion intfdesc in
-            ask_taut spos (stringfun "UO-EXT stability") uoq;
+            ask_taut spos (stringfun "UEXT stability") uoq;
            )
        in
        let check_uo () =
          let r = ask_uo () in
-         report_z3result r spos (stringfun "UO-EXT stability")
+         report_z3result r spos (stringfun "UEXT stability")
        in
        if Formula.exists is_recCohere satq then
          (match ask_taut spos (stringfun "EXT stability") extq with
@@ -1174,9 +1174,9 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
         else
           (let boq = bo_stable_query_irecs xid.irec yid.irec in
            check_taut xid.ipos (stringfun Bo) boq;
-           if not (Formula.exists (is_recU) (Intfdesc.pre xid))
+           if not (Formula.exists (is_recU <||> is_recLatest) (Intfdesc.pre xid))
            then 
-             avoided xid.ipos "(no U) Z3 check" (stringfun Uo)
+             avoided xid.ipos "(no U or latest) Z3 check" (stringfun Uo)
            else
              (let uoq = uo_stable_query_irecs xid.irec yid.irec in
               check_taut xid.ipos (stringfun Uo) uoq
@@ -1284,7 +1284,7 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
             let check_uo cintf = 
               let cpre = cintf.irec.i_pre in
               let needs_uo = 
-                Formula.exists (is_recU) cpre && (* this does not do latest ... *)
+                Formula.exists (is_recU <||> is_recLatest) cpre && 
                 not (NameSet.is_empty (NameSet.inter (Assign.assigned a) (Formula.frees cpre)))
               in
               check_uoparallel needs_uo vassigns ct; (* if repeated, memoisation will save us *)
