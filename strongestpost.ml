@@ -61,12 +61,7 @@ let hatted hatting orig_f =
     | Bfr (Here,Now,bf)         -> if hatting=UExtHat 
                                    then Some (_recBfr There Now (hat binders bf))
                                    else Some f (* don't touch it! *) 
-    | Univ (Now,uf)             -> (* Univ holds everywhere. So in particular it holds hatted. 
-                                      If it gets hooked, then we miss the There, Now case. 
-                                      So we add it here (if it's unnecessary, so what?).
-                                      Please be right ...
-                                    *)
-                                   Some (conjoin [f; hat binders uf])
+    | Univ (Now,uf)             -> Some f (* don't touch it! *) 
     | Latest (Here,Now,v)       -> if hatting=InflightHat 
                                    then Some (_recLatest There Now v)
                                    else Some f (* don't touch it! *)
@@ -104,11 +99,15 @@ let optsp_substitute mapping orig_f =
               ", which contains " ^ string_of_formula f))
   in
   let rec optsub mapping f = 
-    let domodality mm mf =
+    let domodality isU mm mf =
       (subopt mapping 
        &~ (fun mf' -> 
              if isvarmapping mapping f 
-             then Some (conjoin [mm Then mf; mf'])
+             then Some (conjoin [mm Then mf; 
+                                 mf'; 
+                                 if isU then anyway (subopt mapping) (hatted UExtHat mf) else _recTrue
+                                ]
+                     )
              else Some (mm Now mf')
           )
       ) mf
@@ -118,17 +117,17 @@ let optsp_substitute mapping orig_f =
     (* Flogc omitted deliberately: you can't assign to a logical constant *)
     (* We only substitute for unhooked variables -- Here+Now, There+Now *)
     | Fvar  (Here,Now,v)      -> (try Some (mapping <@> v) with Not_found -> None)
-    | Fvar (There,Now,v)      -> Some f
+    | Fvar (There,Now,v)      -> None (* Formula.optmap leaves it alone *)
     | Binder (bk,n,bf)        -> (subopt (List.remove_assoc n mapping) &~ (_Some <.> _recBinder bk n)) bf 
                                  |~~ (fun () -> Some f) (* sorry, but this is essential: bf can't be
                                                            substituted with the original mapping
                                                          *)
-    | Bfr (pl,Now,bf)         -> domodality (_recBfr pl) bf
-    | Univ (Now,uf)           -> domodality _recUniv uf
+    | Bfr (pl,Now,bf)         -> domodality false (_recBfr pl) bf
+    | Univ (Now,uf)           -> domodality true _recUniv uf
     | Latest (pl,Now,v)       -> if List.mem_assoc v mapping 
                                  then Some (_recLatest pl Then v)
                                  else Some f
-    | Sofar (Here,Now, sf)    -> domodality (_recSofar Here) sf
+    | Sofar (Here,Now, sf)    -> domodality false (_recSofar Here) sf
     | Sofar (There,Now, sf)   -> Some f (* worried about this *)
     | Since (Here,Now,f1,f2)  -> (if isvarmapping mapping f then
                                     optionpair_either (subopt mapping) f1 (subopt mapping) f2
