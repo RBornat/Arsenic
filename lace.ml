@@ -449,17 +449,17 @@ let check_constraints_thread preopt postopt labmap opgraph thread =
                                               "component which is not variable assignment"
      | _  -> ()
     );
-    (* load-logical can't have a reservation stitch *)
+    (* load_reserved can't have a reservation stitch *)
     (match target_cid, locopt_of_stitch stitch with
      | CidSimplecom ct, Some _ 
-         when Com.is_loadlogical ct  ->
-           badtarget "reservation stitch" "load-logical"
+         when Com.is_loadreserved ct  ->
+           badtarget "reservation stitch" "load_reserved"
      | _                             -> ()
     );
-    (* reservation stitch may not target load-logical or thread post *)
+    (* reservation stitch may not target load_reserved or thread post *)
     (match is_reserved_stitch stitch, target_cid with
      | true, CidSimplecom ct 
-        when Com.is_loadlogical ct -> badtarget "reservation stitch" "load-logical"
+        when Com.is_loadreserved ct -> badtarget "reservation stitch" "load_reserved"
      | true, CidThreadPost _       -> badtarget "reservation stitch" "thread postcondition"
      | _                           -> ()
     );

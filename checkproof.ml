@@ -74,17 +74,17 @@ module PKSCMap = MyMap.Make (struct type t = pkind * simplecom triplet
                              end
                             )
 
-(* precondition of each simplecom triplet. Different for load-logical, store-conditional *)
+(* precondition of each simplecom triplet. Different for load_reserved, store-conditional *)
 
 let we_are_latest v = _recEqual (_recLatest Here Now v) (_recFname v)
 
 let cpre pk ct =
   let defaultpre = precondition_of_knot pk ct.tripletknot in
-  if Com.is_loadlogical ct then
+  if Com.is_loadreserved ct then
     (match defaultpre with
      | PreSingle fpre            -> defaultpre
      | PreDouble (fpre, locs, _) -> report (Error (ct.tripletpos,
-                                                   Printf.sprintf "precondition of load-logical has %s"
+                                                   Printf.sprintf "precondition of load_reserved has %s"
                                                                   (prefixed_phrase_of_list string_of_location 
                                                                                            "reservation for" "reservations for"
                                                                                            locs
@@ -152,7 +152,7 @@ let mkintf cpre pk ct =
   let preopt = ct.tripletof.sc_ipreopt in
   let defaultpre = cpre Interference ct in 
   let intfdesc fpre = Intfdesc.mk_intfdesc ct.tripletpos fpre assign in
-  if Assign.is_loadlogical assign then
+  if Assign.is_loadreserved assign then
     (let fpre, fpreres = 
        match defaultpre with
        | PreSingle fpre -> fpre, conjoin [fpre; we_are_latest (Location.locv (Assign.reserved assign))]
@@ -275,7 +275,7 @@ let cpost cpre pk ct =
       let apost pre = 
         post_of_pre (fun pre -> Strongestpost.strongest_post true pre a) (justoneloc ct.tripletpos) pre
       in
-      if Assign.is_loadlogical a then
+      if Assign.is_loadreserved a then
         (match pre with
          | PreSingle fpre -> 
              let resloc = Assign.reserved a in

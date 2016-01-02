@@ -14,7 +14,7 @@ open Listutils
  
 type assign = 
   | RbecomesE  of reg * formula                        (* real := pure or aux := auxpure *)
-  | LocbecomesEs of bool * (location * formula) list   (* bool for load logical; first real/real or aux/auxpure, rest aux/auxpure *)
+  | LocbecomesEs of bool * (location * formula) list   (* bool for load-reserved; first real/real or aux/auxpure, rest aux/auxpure *)
   | RsbecomeLocs of bool * (reg list * location) list  (* bool for store conditional; first real/real or aux/auxpure, rest aux/aux *) 
 
 type synchro =
@@ -73,7 +73,7 @@ let is_reg_assign = function
   | RsbecomeLocs _ -> true
   | LocbecomesEs _ -> false
   
-let is_loadlogical = function
+let is_loadreserved = function
   | RsbecomeLocs (b,_) -> b
   | _                  -> false
   
@@ -86,9 +86,9 @@ let reserved = function
   | RsbecomeLocs (true, ((_,loc)::_)) -> loc
   | a                                 -> raise (Invalid_argument ("Assign.reserved " ^ string_of_assign a))
       
-let logically_loaded = function
+let reserved_loaded = function
   | RsbecomeLocs (true, ((rs,loc)::_)) -> singleton_or_tuple (List.map _recFname rs)
-  | a                                  -> raise (Invalid_argument ("Assign.logically_loaded " ^ string_of_assign a))
+  | a                                  -> raise (Invalid_argument ("Assign.reserved_loaded " ^ string_of_assign a))
       
 let conditionally_stored = function
   | LocbecomesEs (true, ((loc,e)::_)) -> e

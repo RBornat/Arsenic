@@ -253,8 +253,8 @@
            let b = 
              match synchro, rslocs with
              | LocalAssign     , _       -> false
-             | LoadLogical     , [_,loc] -> if is_auxloc loc then bad "auxiliary load-logical" else true
-             | LoadLogical     , _       -> bad ("multi-location load-logical " ^ string_of_synchro synchro ^
+             | LoadLogical     , [_,loc] -> if is_auxloc loc then bad "auxiliary load_reserved" else true
+             | LoadLogical     , _       -> bad ("multi-location load_reserved " ^ string_of_synchro synchro ^
                                                  " register assignment"
                                                 )
              | StoreConditional, _       -> bad ("store-conditional operator " ^ string_of_synchro synchro ^
@@ -271,7 +271,7 @@
                          " used in register assignment"
                         )
             | _, _, LoadLogical                   ->
-                    bad ("load-logical operator " ^ string_of_synchro synchro ^
+                    bad ("load_reserved operator " ^ string_of_synchro synchro ^
                          " used in register assignment with non-store rhs"
                         )
             | _            ->
@@ -350,7 +350,7 @@
          | _      , false, StoreConditional -> bad ("store-conditional operator " ^ string_of_synchro synchro ^
                                                     " used in interference assignment"
                                                    )
-         | _      , _    , LoadLogical      -> bad ("load-logical operator " ^ string_of_synchro synchro ^
+         | _      , _    , LoadLogical      -> bad ("load_reserved operator " ^ string_of_synchro synchro ^
                                                     " used in location assignment"
                                                    )
        in

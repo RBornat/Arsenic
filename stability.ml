@@ -74,7 +74,8 @@ let bo_stable_query_irecs irec1 irec2 =
   let assign1 = irec1.i_assign in
   let assertion = if Assign.is_storeconditional assign1 
                   then conjoin [assertion; 
-                                _recLatest Here Now (Location.locv (Assign.reserved assign1))
+                                _recEqual (_recLatest Here Now (Location.locv (Assign.reserved assign1)))
+                                          (Assign.conditionally_stored assign1)
                                ]
                   else assertion
   in
@@ -90,7 +91,9 @@ let uo_stable_checks assertion irec =
     let assign = instance.i_assign in
     let sp = strongest_post true (conjoin [hatted_p; instance.i_pre]) assign in
     let sp = if Assign.is_storeconditional assign 
-             then conjoin [sp; _recLatest Here Now (Location.locv (Assign.reserved assign))
+             then conjoin [sp; 
+                           _recEqual (_recLatest Here Now (Location.locv (Assign.reserved assign)))
+                                     (Assign.conditionally_stored assign)
                           ]
              else sp
     in _recImplies sp hatted_p
@@ -106,7 +109,8 @@ let uo_stable_query_irecs irec1 irec2 =
   let assign1 = irec1.i_assign in
   let assertion = if Assign.is_storeconditional assign1 
                   then conjoin [assertion; 
-                                _recLatest Here Now (Location.locv (Assign.reserved assign1))
+                                _recEqual (_recLatest Here Now (Location.locv (Assign.reserved assign1)))
+                                          (Assign.conditionally_stored assign1)
                                ]
                   else assertion
   in

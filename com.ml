@@ -147,9 +147,9 @@ let is_aux_assign {tripletof=simplecom} =
   | Assign a -> Assign.is_aux_assign a
   | _        -> false
   
-let is_loadlogical {tripletof=simplecom} =
+let is_loadreserved {tripletof=simplecom} =
   match simplecom.sc_node with
-  | Assign a -> Assign.is_loadlogical a
+  | Assign a -> Assign.is_loadreserved a
   | _        -> false
   
 let is_storeconditional {tripletof=simplecom} =
