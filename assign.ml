@@ -17,20 +17,20 @@ type assign =
   | LocbecomesEs of bool * (location * formula) list   (* bool for load-reserved; first real/real or aux/auxpure, rest aux/auxpure *)
   | RsbecomeLocs of bool * (reg list * location) list  (* bool for store conditional; first real/real or aux/auxpure, rest aux/aux *) 
 
-type synchro =
-  | LoadLogical      (* :=* *)
-  | StoreConditional (* *:= *)
+type assignop =
+  | LoadReserve      (* :=? *)
+  | StoreConditional (* ?:= *)
   | LocalAssign      (* := *)
 
-let string_of_synchro = function
-  | LoadLogical      -> ":=*"
-  | StoreConditional -> "*:="
+let string_of_assignop = function
+  | LoadReserve      -> ":=?"
+  | StoreConditional -> "?:="
   | LocalAssign      -> ":="
 
 let string_of_assign a =
-  let soa synchro lhs rhs = Printf.sprintf "%s %s %s" lhs (string_of_synchro synchro) rhs in
+  let soa assignop lhs rhs = Printf.sprintf "%s %s %s" lhs (string_of_assignop assignop) rhs in
   match a with
-  | RbecomesE (r,f)    -> soa LocalAssign (Name.string_of_reg r) (string_of_formula f)
+  | RbecomesE (r,f)        -> soa LocalAssign (Name.string_of_reg r) (string_of_formula f)
   | LocbecomesEs (b,locfs) -> 
       (let op = if b then StoreConditional else LocalAssign in
        match locfs with
@@ -45,7 +45,7 @@ let string_of_assign a =
          soa op (string_of_list string_of_location "," locs) (string_of_list string_of_rhs "," fs)
       )
   | RsbecomeLocs (b,rslocs) -> 
-      (let op = if b then LoadLogical else LocalAssign in
+      (let op = if b then LoadReserve else LocalAssign in
        match rslocs with
        | [rs,loc] -> soa op (string_of_list Name.string_of_reg "," rs) (string_of_location loc)
        | _        ->

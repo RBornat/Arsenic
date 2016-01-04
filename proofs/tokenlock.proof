@@ -1,9 +1,12 @@
 { aa:lock=(0,0,0)/\tk=0 }
+
+macro earlier (A1,C1,A2,C2) = C1<C2 \/ C1=C2/\A1=0/\A2=1
+
 ----------------------
 
-guar [                 [B,C].lock=(0,B,C) | lock:=1,0,C;
+guar [              [B,C].lock=(0,B,C) | lock:=1,0,C;
        [C].latest(lock)=(1,0,C)/\_B(tk=C) | tk:=C+1;
-               [C]._B(lock=(1,0,C)/\tk>C) | lock:=(0,0,C+1)
+            [C]._B(lock=(1,0,C)/\tk>C) | lock:=(0,0,C+1)
      ]
 
 macro loopinv = forall(B,C)(latest(lock)=(0,B,C)=>_B(tk=C))
@@ -12,35 +15,35 @@ while bb:true do
     {* bo aa: loopinv *} \->/ ({* lo e: loopinv *} \/ {* lo dd(f): loopinv *})
                                                                     a:skip; 
     do
-        {* lo a: loopinv *}                                         b:r1,raux_,rauxC :=* lock
+        {* lo a: loopinv *}                                         b:r1,raux_,rauxC :=? lock
     until {* lo b: loopinv *}                                   cc:r1=0;
     
-    if {* lo b *lock(t): r1=0=>latest(lock)=(0,raux_,rauxC);
+    if {* lo b ?lock: r1=0=>latest(lock)=(0,raux_,rauxC);
           lo cc(t): r1=0 /\ loopinv *}
-       [* *: lock=(0,raux_,rauxC) *]
-                                                                dd: lock *:= 1,0,rauxC
+       [* ? lock=(0,raux_,rauxC) *]
+                                                                dd: lock ?:= 1,0,rauxC
     then  
-        {* lo dd(t): latest(lock)=(1,0,rauxC)/\_B(tk=rauxC) *}      c: r2:=tk;
-        {* lo c: latest(lock)=(1,0,r2)/\_B(tk=r2) *}                d: tk:=r2+1;
+        {* lo dd(t): latest(lock)=(1,0,rauxC)/\_B(tk=rauxC) *}         c: r2:=tk;
+        {* lo c: latest(lock)=(1,0,r2)/\_B(tk=r2) *}                   d: tk:=r2+1;
         {* bo d {latest(lock)=(1,0,r2)/\tk=r2+1/\loopinv}: 
                 _B(latest(lock)=(1,0,r2)/\tk=r2+1/\loopinv) *}
         [* _B(lock=(1,0,r2)/\tk>r2) *]                              e: lock:=0,0,r2+1
     fi
 od
-rely [                 [A,B,C].lock=(0,B,C)/\A!=0 | lock:=1,A,C;
-       [A,C].latest(lock)=(1,A,C)/\_B(tk=C)/\A!=0 | tk:=C+1;
-               [A,C]._B(lock=(1,A,C)/\tk>C)/\A!=0 | lock:=(0,A,C+1)
-     ] 
 (*  
+rely [              [A,B,C].lock=(0,B,C)/\A!=0 | lock:=1,A,C;
+       [A,C].latest(lock)=(1,A,C)/\_B(tk=C)/\A!=0 | tk:=C+1;
+            [A,C]._B(lock=(1,A,C)/\tk>C)/\A!=0 | lock:=(0,A,C+1)
+     ] 
 ----------------------
-guar [                 [B,C].lock=(0,B,C) | lock:=1,1,C;
+guar [              [B,C].lock=(0,B,C) | lock:=1,1,C;
        [C].latest(lock)=(1,1,C)/\_B(tk=C) | tk:=C+1;
-               [C]._B(lock=(1,1,C)/\tk>C) | lock:=(0,1,C+1)
+            [C]._B(lock=(1,1,C)/\tk>C) | lock:=(0,1,C+1)
      ]
 
 ----------------------
-guar [                 [B,C].lock=(0,B,C) | lock:=1,2,C;
+guar [              [B,C].lock=(0,B,C) | lock:=1,2,C;
        [C].latest(lock)=(1,2,C)/\_B(tk=C) | tk:=C+1;
-               [C]._B(lock=(1,2,C)/\tk>C) | lock:=(0,2,C+1)
+            [C]._B(lock=(1,2,C)/\tk>C) | lock:=(0,2,C+1)
      ]
 *)

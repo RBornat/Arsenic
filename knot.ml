@@ -46,10 +46,10 @@ let iter fstitch = fold (fun () -> fstitch) ()
 let reservations =
   let srev ress stitch =
     match locopt_of_stitch stitch with
-    | None         -> ress
-    | Some (loc,_) -> if List.exists (Location.eq loc) ress
-                       then ress 
-                       else loc::ress
+    | None     -> ress
+    | Some loc -> if List.exists (Location.eq loc) ress
+                  then ress 
+                  else loc::ress
   in
   fold srev []
   
@@ -109,8 +109,8 @@ let pre_iter fpre floc = pre_fold (fun () -> fpre) (fun () -> floc) ()
 let precondition_of_knot pkind knot =
   let okres withres s = 
     match locopt_of_stitch s with
-    | None       -> true
-    | Some (_,b) -> b=withres
+    | None   -> true
+    | Some _ -> withres
   in
   let rec ass_k withres withgo k = 
     match k.knotnode with
@@ -135,8 +135,8 @@ let precondition_of_knot pkind knot =
                           conjoin [e; sat (ass_k withres true knot)]
                         else e
   in
-  if exists (function {stitchlocopt=Some(_,true)} -> true
-             |        _                           -> false
+  if exists (function {stitchlocopt=Some _} -> true
+             |        _                     -> false
             )
             knot
   then PreDouble (pre false, reservations knot, pre true)

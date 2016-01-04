@@ -486,11 +486,7 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
   in
   
   let check_external_stability spos locopt assertion (_,intfdesc as intf) =
-    let resopt = 
-      match locopt with
-      | Some (loc, true) -> Some loc
-      | _                -> None
-    in
+    let resopt = locopt in
     let stringfun stabkind () = 
       Printf.sprintf "%s of %s against %s (from %s)%s" 
                      stabkind
@@ -800,7 +796,7 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
       (* inheritance of location *)
       (* this is a bit WRONG. Will work with variable locations, perhaps not with arrays *)
       (match locopt_of_stitch stitch with
-       | Some (loc, _) -> 
+       | Some loc -> 
            (match sourcepost_of_stitch Elaboration stitch with
             | PostSingle pre, _ ->
                 report (Error (stitch.stitchpos,

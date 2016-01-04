@@ -82,8 +82,8 @@ rule make_token = parse
   | ';'         {SEMICOLON}
   
   | ":="        {BECOMES}
-  | ":=*"       {LOADLOGICAL}
-  | "*:="       {STORECONDITIONAL}
+  | ":=?"       {LOADRESERVE}
+  | "?:="       {STORECONDITIONAL}
   
   | '+'         {PLUS}
   | '-'         {MINUS}
@@ -137,6 +137,7 @@ rule make_token = parse
   | "_c"        {COHERE}
   | "_cv"       {COHEREVAR}
   | "latest"    {LATEST}
+  | "?"         {QUERY}
   
   | "guarantee" {GUARANTEE}
   | "guar"      {GUARANTEE}

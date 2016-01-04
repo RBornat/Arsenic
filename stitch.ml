@@ -15,7 +15,7 @@ open Node
 type stitch = { stitchpos        : sourcepos; 
                 stitchorder      : order; 
                 stitchsource     : node; 
-                stitchlocopt     : (location * bool) option;
+                stitchlocopt     : location option;
                 stitchspopt      : spost option; 
                 stitchembroidery : formula 
               }
@@ -27,8 +27,8 @@ and spost =
   
 let string_of_spost = function
   | SpostSimple f       -> "{" ^ string_of_formula f ^ "}"
-  | SpostRes    f       -> "{ *:" ^ string_of_formula f ^ "}"
-  | SpostDouble (f1,f2) -> "{" ^ string_of_formula f1 ^ "; *:" ^ string_of_formula f2 ^ "}"
+  | SpostRes    f       -> "{ ?" ^ string_of_formula f ^ "}"
+  | SpostDouble (f1,f2) -> "{" ^ string_of_formula f1 ^ "; ?" ^ string_of_formula f2 ^ "}"
   
 let string_of_stitch { stitchorder      = order; 
                        stitchsource     = source;
@@ -41,9 +41,7 @@ let string_of_stitch { stitchorder      = order;
                  (string_of_node source)
                  (match locopt with
                   | None -> ""
-                  | Some (loc, b) -> Printf.sprintf "*%s(%s)"
-                                        (string_of_location loc)
-                                        (if b then "t" else "f")
+                  | Some (loc) -> Printf.sprintf "?%s" (string_of_location loc)
                  )
                  (match spopt with
                   | None -> ""
@@ -69,4 +67,4 @@ let assertion_of_stitch s = s.stitchembroidery
 
 let is_go = Order.is_go <.> order_of_stitch
 
-let is_reserved_stitch s = match locopt_of_stitch s with Some (_,true) -> true | _ -> false
+let is_reserved_stitch s = match locopt_of_stitch s with Some _ -> true | _ -> false

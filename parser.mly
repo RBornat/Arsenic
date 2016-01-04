@@ -151,14 +151,14 @@
   (* filtering assigns -- parsed as lhs list := formula list, where each lhs is a
      list of Assign.location. All lists are non-empty -- see loclist and formulas entries in parser
    *)
-  let classify_assign ok_logc is_com binders (lefts,synchro,rights) =
+  let classify_assign ok_logc is_com binders (lefts,assignop,rights) =
     let string_of_lhs = function
       | [a] -> string_of_location a
       | lhs -> "(" ^ string_of_list string_of_location "," lhs ^ ")"
     in
     let assign () = "assignment " ^ 
                     string_of_list string_of_lhs "," lefts ^
-                    (string_of_synchro synchro) ^
+                    (string_of_assignop assignop) ^
                     string_of_list string_of_formula "," rights
     in
     let bad_interferenceform () = 
@@ -251,27 +251,27 @@
            List.iter (check_single false) (List.tl rslocs);
            (* that's it, I think *)
            let b = 
-             match synchro, rslocs with
+             match assignop, rslocs with
              | LocalAssign     , _       -> false
-             | LoadLogical     , [_,loc] -> if is_auxloc loc then bad "auxiliary load_reserved" else true
-             | LoadLogical     , _       -> bad ("multi-location load_reserved " ^ string_of_synchro synchro ^
+             | LoadReserve     , [_,loc] -> if is_auxloc loc then bad "auxiliary load_reserved" else true
+             | LoadReserve     , _       -> bad ("multi-location load_reserved " ^ string_of_assignop assignop ^
                                                  " register assignment"
                                                 )
-             | StoreConditional, _       -> bad ("store-conditional operator " ^ string_of_synchro synchro ^
+             | StoreConditional, _       -> bad ("store-conditional operator " ^ string_of_assignop assignop ^
                                                  " used in register assignment"
                                                 )
            in
            RsbecomeLocs (b, rslocs)
        | []  , rights ->
            ((* it had better be a single-register assignment *)
-            match lefts, rights, synchro with
+            match lefts, rights, assignop with
             | [[loc]], [e], LocalAssign      -> RbecomesE (locv loc,e)
             | [[loc]], [e], StoreConditional -> 
-                    bad ("store-conditional operator " ^ string_of_synchro synchro ^
+                    bad ("store-conditional operator " ^ string_of_assignop assignop ^
                          " used in register assignment"
                         )
-            | _, _, LoadLogical                   ->
-                    bad ("load_reserved operator " ^ string_of_synchro synchro ^
+            | _, _, LoadReserve                   ->
+                    bad ("load_reserved operator " ^ string_of_assignop assignop ^
                          " used in register assignment with non-store rhs"
                         )
             | _            ->
@@ -340,17 +340,17 @@
        List.iter (check_single false) (List.tl loces);
        (* and that seems to be it *)
        let b =
-         match loces, is_com, synchro with
+         match loces, is_com, assignop with
          | _      , _    , LocalAssign      -> false
          | [loc,e], true , StoreConditional -> if is_auxloc loc then bad "auxiliary store-conditional"
                                                else true
-         | _      , true , StoreConditional -> bad ("store-conditional operator " ^ string_of_synchro synchro ^
+         | _      , true , StoreConditional -> bad ("store-conditional operator " ^ string_of_assignop assignop ^
                                                     " used in multi-location assignment"
                                                    ) 
-         | _      , false, StoreConditional -> bad ("store-conditional operator " ^ string_of_synchro synchro ^
+         | _      , false, StoreConditional -> bad ("store-conditional operator " ^ string_of_assignop assignop ^
                                                     " used in interference assignment"
                                                    )
-         | _      , _    , LoadLogical      -> bad ("load_reserved operator " ^ string_of_synchro synchro ^
+         | _      , _    , LoadReserve      -> bad ("load_reserved operator " ^ string_of_assignop assignop ^
                                                     " used in location assignment"
                                                    )
        in
@@ -518,7 +518,7 @@
     | _         -> ()
 
   type conditionthing =
-    | CTAssign of Location.location list list * Assign.synchro * Formula.formula list
+    | CTAssign of Location.location list list * Assign.assignop * Formula.formula list
     | CTExpr   of formula
 %}
 
@@ -535,7 +535,7 @@
 %token WHILE DO OD UNTIL
 %token SKIP ASSERT
 
-%token BECOMES LOADLOGICAL STORECONDITIONAL
+%token BECOMES LOADRESERVE STORECONDITIONAL
 
 /* arith operators */
 %token PLUS MINUS TIMES DIV MOD
@@ -572,7 +572,7 @@
 %token LO BO UO GO
 %token ORLOOP
 
-%token COLON BAR EOP 
+%token COLON BAR EOP QUERY
 
 %token GUARANTEE /* INTERNAL*/  GIVEN MACRO TMACRO RELY
 
@@ -706,10 +706,16 @@ preknot:
 
 ipreopt:
   | LSSQBRA formula RSSQBRA             { Some (IpreSimple (check_assertion false $2)) }
-  | LSSQBRA TIMES COLON formula RSSQBRA { Some (IpreRes (check_assertion false $4)) }
-  | LSSQBRA formula SEMICOLON TIMES COLON formula RSSQBRA 
+  | LSSQBRA QUERY formula RSSQBRA       { Some (IpreRes (check_assertion false $3)) }
+  | LSSQBRA formula SEMICOLON QUERY formula RSSQBRA 
                                         { Some (IpreDouble (check_assertion false $2, 
-                                                            check_assertion false $6
+                                                            check_assertion false $5
+                                                           )
+                                               ) 
+                                        }
+  | LSSQBRA QUERY formula SEMICOLON formula RSSQBRA 
+                                        { Some (IpreDouble (check_assertion false $5, 
+                                                            check_assertion false $3
                                                            )
                                                ) 
                                         }
@@ -732,23 +738,21 @@ stitch:
                                         { stitchadorn $1 $2 $3 $4 (check_assertion false $6) }
 
 stitchlocopt:
-  | TIMES location LPAR name RPAR       { Some ($2,
-                                                match $4 with
-                                                | "t" -> true
-                                                | "f" -> false
-                                                | _   -> bad (Printf.sprintf "%s should be t or f in *%s(%s)"
-                                                                      $4 (string_of_location $2) $4
-                                                             )
-                                               )
-                                        }
+  | QUERY location                      { Some ($2) }
   |                                     { None }
   
 stitchspopt:
   | LBRACE formula RBRACE               { Some (SpostSimple (check_assertion false $2)) }
-  | LBRACE TIMES COLON formula RBRACE   { Some (SpostRes (check_assertion false $4)) }
-  | LBRACE formula SEMICOLON TIMES COLON formula RBRACE 
+  | LBRACE QUERY formula RBRACE         { Some (SpostRes (check_assertion false $3)) }
+  | LBRACE formula SEMICOLON QUERY formula RBRACE 
                                         { Some (SpostDouble (check_assertion false $2, 
-                                                             check_assertion false $6
+                                                             check_assertion false $5
+                                                            )
+                                               ) 
+                                        }
+  | LBRACE QUERY formula SEMICOLON formula RBRACE 
+                                        { Some (SpostDouble (check_assertion false $5, 
+                                                             check_assertion false $3
                                                             )
                                                ) 
                                         }
@@ -856,7 +860,7 @@ tcep:
   
 assign:
   | lhss BECOMES formulas               {$1,LocalAssign,$3}
-  | lhss LOADLOGICAL formulas           {$1,LoadLogical,$3}
+  | lhss LOADRESERVE formulas           {$1,LoadReserve,$3}
   | lhss STORECONDITIONAL formulas      {$1,StoreConditional,$3}
   
 lhss:

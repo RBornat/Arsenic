@@ -367,7 +367,7 @@ let latex_of_knot =
   lok
 
 let latex_of_assign a =
-  let soa synchro lhs rhs = lhs ^ (string_of_synchro synchro) ^ rhs in
+  let soa assignop lhs rhs = lhs ^ (string_of_assignop assignop) ^ rhs in
   match a with
   | RbecomesE (r,f) -> soa LocalAssign (latex_of_reg r) (latex_of_formula f)
   | LocbecomesEs (b,loces) ->
@@ -391,7 +391,7 @@ let latex_of_assign a =
            soa op (string_of_list latex_of_location "," locs) (string_of_list string_of_rhs "," es)
       )
   | RsbecomeLocs (b,rslocs) -> 
-      (let op = if b then LoadLogical else LocalAssign in
+      (let op = if b then LoadReserve else LocalAssign in
        match rslocs with
        | [rs,loc] ->
            let lhs =
