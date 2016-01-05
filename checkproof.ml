@@ -1085,44 +1085,47 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
          let abset = OPGraph.paths (Cnode alab) (Cnode blab) opgraph in
          let opset = so_butnot_constraint order_filter abset in
          if not (OPSet.is_empty opset) then
-           let aintf = intf_of_ct Interference at in
-           let bintf = intf_of_ct Interference bt in
-           (* now that this has all doubled up, I could do with a Map here.
-              Wrong: check_taut is memoised, so we're ok.
-            *)
-           let check_buo aintf bintf =
-             let stringfun () =
-               Printf.sprintf "%s-parallel (in-flight) stability of %s against interference %s of command %s\
-                               \n   -- there %s"
-                              constraint_string
-                              (string_of_intfdesc aintf)
-                              (string_of_intfdesc bintf)
-                              (string_of_label blab)
-                              (Listutils.prefixed_phrase_of_list 
-                                    (string_of_path <.> 
-                                     completepath_of_opath (Cnode alab) (Cnode blab)
-                                    )
-                                    "is a path"
-                                    "are paths"
-                                    (OPSet.elements opset)
-                              )
+           (let aintf = intf_of_ct Interference at in
+            let bintf = intf_of_ct Interference bt in
+            (* now that this has all doubled up, I could do with a Map here.
+               Wrong: check_taut is memoised, so we're ok.
+             *)
+            let check_buo aintf bintf =
+              let stringfun () =
+                Printf.sprintf "%s-parallel (in-flight) stability of %s against interference %s of command %s\
+                                \n   -- there %s"
+                               constraint_string
+                               (string_of_intfdesc aintf)
+                               (string_of_intfdesc bintf)
+                               (string_of_label blab)
+                               (Listutils.prefixed_phrase_of_list 
+                                     (string_of_path <.> 
+                                      completepath_of_opath (Cnode alab) (Cnode blab)
+                                     )
+                                     "is a path"
+                                     "are paths"
+                                     (OPSet.elements opset)
+                               )
+              in
+              let assigned = Intfdesc.assigned bintf in
+              let apre = bindExists (Intfdesc.binders aintf) (Intfdesc.pre aintf) in
+              let frees = Formula.frees apre in
+              if !verbose then 
+                Printf.printf "\ncheck_buo %s" (stringfun ());
+              if not (needed apre) || NameSet.is_empty (NameSet.inter assigned frees) then
+                avoided at.tripletknot.knotloc "check of" stringfun
+              else
+                (let boq = constraint_stab aintf.irec bintf.irec in
+                 check_taut at.tripletknot.knotloc stringfun boq
+                )
              in
-             let assigned = Intfdesc.assigned bintf in
-             let apre = bindExists (Intfdesc.binders aintf) (Intfdesc.pre aintf) in
-             let frees = Formula.frees apre in
-             if not needed || NameSet.is_empty (NameSet.inter assigned frees) then
-               avoided at.tripletknot.knotloc "check of" stringfun
-             else
-               (let boq = constraint_stab aintf.irec bintf.irec in
-                check_taut at.tripletknot.knotloc stringfun boq
-               )
-           in
-           match aintf, bintf with
-           | IntfSingle ai        , IntfSingle bi         -> check_buo ai bi
-           | IntfSingle ai        , IntfDouble (bi,bires) -> check_buo ai bi; check_buo ai bires
-           | IntfDouble (ai,aires), IntfSingle bi         -> check_buo ai bi; check_buo aires bi
-           | IntfDouble (ai,aires), IntfDouble (bi,bires) -> check_buo ai bi; check_buo ai bires;
-                                                             check_buo aires bi; check_buo aires bires
+             match aintf, bintf with
+             | IntfSingle ai        , IntfSingle bi         -> check_buo ai bi
+             | IntfSingle ai        , IntfDouble (bi,bires) -> check_buo ai bi; check_buo ai bires
+             | IntfDouble (ai,aires), IntfSingle bi         -> check_buo ai bi; check_buo aires bi
+             | IntfDouble (ai,aires), IntfDouble (bi,bires) -> check_buo ai bi; check_buo ai bires;
+                                                               check_buo aires bi; check_buo aires bires
+          )
         )
     in
     if List.mem triplet vassigns then
@@ -1276,19 +1279,16 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
                            )
             );
             (* internal bo/uo parallelism *)
-            check_boparallel true vassigns ct;
+            check_boparallel (fun _ -> true) vassigns ct;
             let check_uo cintf = 
-              let cpre = cintf.irec.i_pre in
-              let needs_uo = 
-                Formula.exists (is_recU <||> is_recLatest) cpre && 
-                not (NameSet.is_empty (NameSet.inter (Assign.assigned a) (Formula.frees cpre)))
-              in
+              let needs_uo = Formula.exists (is_recU <||> is_recLatest) in
               check_uoparallel needs_uo vassigns ct; (* if repeated, memoisation will save us *)
               (* self-uo stability *)
               let stringfun () = 
                 Printf.sprintf "self-uo stability of %s" (Intfdesc.string_of_intfdesc cintf) 
               in
-              if not (needs_uo) then
+              let cpre = cintf.irec.i_pre in
+              if not (needs_uo cpre) then
                 avoided ct.tripletpos "check of" stringfun
               else
                 (let cirec = cintf.irec in
