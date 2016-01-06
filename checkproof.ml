@@ -1109,10 +1109,9 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
               in
               let assigned = Intfdesc.assigned bintf in
               let apre = bindExists (Intfdesc.binders aintf) (Intfdesc.pre aintf) in
-              let frees = Formula.frees apre in
               if !verbose then 
                 Printf.printf "\ncheck_buo %s" (stringfun ());
-              if not (needed apre) || NameSet.is_empty (NameSet.inter assigned frees) then
+              if not (needed apre assigned) then
                 avoided at.tripletknot.knotloc "check of" stringfun
               else
                 (let boq = constraint_stab aintf.irec bintf.irec in
@@ -1279,16 +1278,21 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
                            )
             );
             (* internal bo/uo parallelism *)
-            check_boparallel (fun _ -> true) vassigns ct;
+            let affected f assigned =
+              not (NameSet.is_empty (NameSet.inter assigned (Formula.frees f)))
+            in
+            check_boparallel affected vassigns ct;
             let check_uo cintf = 
-              let needs_uo = Formula.exists (is_recU <||> is_recLatest) in
-              check_uoparallel needs_uo vassigns ct; (* if repeated, memoisation will save us *)
+              let uo_needed apre assigned = 
+                Formula.exists ((is_recU <||> is_recLatest) <&&> (fun f -> affected f assigned)) apre
+              in
+              check_uoparallel uo_needed vassigns ct; (* if repeated, memoisation will save us *)
               (* self-uo stability *)
               let stringfun () = 
                 Printf.sprintf "self-uo stability of %s" (Intfdesc.string_of_intfdesc cintf) 
               in
               let cpre = cintf.irec.i_pre in
-              if not (needs_uo cpre) then
+              if not (uo_needed cpre (Intfdesc.assigned cintf)) then
                 avoided ct.tripletpos "check of" stringfun
               else
                 (let cirec = cintf.irec in
