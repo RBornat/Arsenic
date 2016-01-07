@@ -362,8 +362,8 @@
    
   let check_conditional_assign assign =
     match classify_assign true true NameSet.empty assign with
-    | LocbecomesEs (true,_) as a -> a
-    | _                          -> bad ("conditional assignment must be store-conditional")
+    | LocbecomesEs (true,_) (*as a*) -> bad "store-conditional not supported. Sorry." (*; a*)
+    | _                              -> bad ("conditional assignment must be store-conditional")
     
   let rec makebinder bindf locnames f = 
     match locnames with
@@ -841,8 +841,8 @@ tcep:
   
 assign:
   | lhss BECOMES formulas               {$1,LocalAssign,$3}
-  | lhss LOADRESERVE formulas           {$1,LoadReserve,$3}
-  | lhss STORECONDITIONAL formulas      {$1,StoreConditional,$3}
+  | lhss LOADRESERVE formulas           {bad "load-reserve not supported. Sorry"(*; $1,LoadReserve,$3*)}
+  | lhss STORECONDITIONAL formulas      {bad "store-conditional not supported. Sorry"(*; $1,StoreConditional,$3*)}
   
 lhss:
   | lhs                                 {[$1]}
@@ -885,7 +885,7 @@ condition:
                                           | CTExpr e ->
                                               if $2=None then 
                                                 CExpr (tripletadorn $1 $3 e)
-                                              else bad "control expression with an interference pre"
+                                              else bad "control expression with an interference precondition"
                                         }
 
 conditionthing:
@@ -907,8 +907,10 @@ primary:
                                          fadorn (ouat pl wh $4).fnode
                                         }
   | tcep LATEST LPAR latestname RPAR   
-                                        { let pl, wh = $1 in
-                                          fadorn (Latest (pl,wh,$4)) }
+                                        { bad "latest not supported. Sorry"(*;
+                                          let pl, wh = $1 in
+                                          fadorn (Latest (pl,wh,$4)) *)
+                                        }
 /*
   | time USOFAR LPAR formula RPAR      {fadorn (Univ ($1, fadorn (Sofar (Here, Now, $4))))}
  */

@@ -226,7 +226,7 @@ let rec latex_of_primary f =
       | Sofar (_,_,f)        -> latex_of_app (sname "sofar")   (latex_of_formula f)
       | App (n,fs)           -> latex_of_app (latex_of_name n) (latex_of_args fs)
       | Cohere (v,f1,f2)     -> latex_of_app (latex_of_var v ^"_{c}") (latex_of_args [f1;f2])
-      | Latest (_,v)         -> latex_of_app (sname "latest") (latex_of_var v)
+      | Latest _             -> raise (Error "latest not supported. Sorry") (*latex_of_app (sname "latest") (latex_of_var v)*)
       | _                    -> bracketed_latex_of_formula f
 
 and bracketed_latex_of_formula f = Printf.sprintf "(%s)" (latex_of_formula f)
@@ -327,10 +327,8 @@ let latex_of_stitch { stitchorder      = order;
                  (sname (Order.string_of_order order))
                  (latex_of_node source)
                  (match locopt with
-                  | None -> ""
-                  | Some (loc, b) -> Printf.sprintf "*%s(%s)"
-                                        (latex_of_location loc)
-                                        (if b then "t" else "f")
+                  | None     -> ""
+                  | Some loc -> Printf.sprintf "*%s" (latex_of_location loc)
                  )
                  (match spopt with
                   | None                 -> ""

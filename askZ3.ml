@@ -295,9 +295,6 @@ let z3check_query question task noisy assertions query =
          (* if a query has hatting or hooking, then it's a stability query. Actually it's
             if and only if, because since we embraced SCloc there is always x=xhat in 
             stability queries.
-            
-            Use 0, 1 as thread numbers, and translate latest(x) as x=xhat (otherwise it's
-            x=x^(-1), which makes it an uninterpreted boolean function).
           *)
          let modal_cxt, query, assertions =
          if List.exists (Formula.exists is_hatted) (query::assertions) then
@@ -538,12 +535,12 @@ let z3check_query question task noisy assertions query =
                  mk_app z3context ndecl (Array.of_list (List.map aof fs))
              | Bfr           _             
              | Univ          _             
-             | Fandw           _             
+             | Fandw         _             
              | Sofar         _
              | Since         _
              | Cohere        _     
              | Threaded      _     
-             | Latest        _     ->
+             | Latest        _ ->
                  raise (Invalid_argument ("askZ3.ast_of_formula\n" ^ explain_string_of_formula orig_f ^ "\ncontains " ^ string_of_formula f))
            in
            aof orig_f
