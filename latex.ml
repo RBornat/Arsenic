@@ -276,10 +276,6 @@ and latex_of_formula f =
             (latex_of_formula f)
   | Tuple fs                    -> if not (show_aux()) then latex_of_formula (List.hd fs)
                                    else latex_of_args fs
-  | ArraySel (af,ixf)           -> latex_of_formula af ^ "{}[" ^ latex_of_formula ixf ^ "]"
-  | ArrayStore (af,ixf,vf)      -> bracket_left (formulaprio af) arraystoreprio af ^
-                                   arraystore_token ^ 
-                                   latex_of_binary_formula ixf vf arraymaps_token arraymapsprio 
   | Threaded (i,tf)             -> let lff = bracket_left (formulaprio tf) (formulaprio tf)  in
                                    lff f ^ "@@@@" ^ string_of_int i                                   
 
@@ -311,7 +307,6 @@ and latex_of_cseq = function
 
 let latex_of_location = function
   | VarLoc v         -> latex_of_var v
-  | ArrayLoc (v,ixf) -> latex_of_var v ^ "[" ^ latex_of_formula ixf ^ "]"
   
 (* ******************************** commands ************************************* *)
 

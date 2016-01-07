@@ -1,3 +1,9 @@
+(* This file is part of Arsenic, a proofchecker for New Lace logic.
+   Copyright (c) 2015-2016 Richard Bornat.
+   Licensed under the MIT license (sic): see LICENCE.txt or
+   https://opensource.org/licenses/MIT
+ *)
+ 
 open Function
 open Tuple
 open Sourcepos
@@ -20,12 +26,6 @@ open Stability
 open Intfdesc
 open Location
 
-(* This file is part of Arsenic, a proofchecker for New Lace logic.
-    Copyright (c) 2015 Richard Bornat.
-   Licensed under the MIT license (sic): see LICENCE.txt or
-   https://opensource.org/licenses/MIT
- *)
- 
 exception Crash of string
 exception ModalQFail (* internal, see below *)
 
@@ -254,7 +254,6 @@ let post_of_pre fpre floc pre =
   | PreSingle pre                -> PostSingle (fpre pre)
   | PreDouble (pre, locs, preres) -> PostDouble (fpre pre, floc locs, fpre preres)
 
-(* this is a bit WRONG. It will work for variables, not for arrays yet *)
 let justoneloc pos = function
   | []             -> raise (Crash (Printf.sprintf "%s justoneloc no locs" (string_of_sourcepos pos)))
   | [loc]          -> loc
@@ -587,8 +586,6 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
     let tranloce (loc,e) =
       match loc with
       | VarLoc v         -> _recEqual (_recFname (newforold v)) e
-      | ArrayLoc (v,ixf) -> _recEqual (_recFname (newforold v))
-                                             (_recArrayStore (_recFname v) ixf e)
     in
     let tranloces = conjoin <.> List.map tranloce in
     let tranextravs = 
@@ -794,7 +791,6 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
       check_taut (pos_of_stitch stitch) stringfun query
       ;
       (* inheritance of location *)
-      (* this is a bit WRONG. Will work with variable locations, perhaps not with arrays *)
       (match locopt_of_stitch stitch with
        | Some loc -> 
            (match sourcepost_of_stitch Elaboration stitch with
@@ -1234,7 +1230,7 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
             let unique_ve (loc,e) =
               if NameSet.mem (Location.locv loc) !Coherence.coherence_variables then
                 (let rhs = 
-                   _recSofar Here Now (_recNotEqual (Location._recFloc loc) e) (* fun if it's an array ... *)
+                   _recSofar Here Now (_recNotEqual (Location._recFloc loc) e) 
                  in
                  let check_unique pre = 
                    let query = _recImplies pre rhs in

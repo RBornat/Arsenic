@@ -63,7 +63,6 @@ let rec axstring_of_type t =
   | TupleType    ts -> "!Tup" ^ String.concat "" (List.map axstring_of_type ts) ^ "!" 
   | FuncType (ts,t) -> "!Func" ^ String.concat "" (List.map axstring_of_type ts) 
                        ^ axstring_of_type t ^ "!"
-  | ArrayType t     -> "!Arr" ^ axstring_of_type t ^ "!"
   | FTypeVar      _ 
   | VarType       _ -> raise (Invalid_argument ("axstring_of_type " ^ string_of_ftype t))
 

@@ -69,8 +69,6 @@
                               else None
       | Fvar       _ 
       | Ite        _
-      | ArraySel   _
-      | ArrayStore _
       | Binder     _   
       | Since      _   
       | Bfr        _      
@@ -167,14 +165,12 @@
     let isreg_lhs lhs = 
       match lhs with 
       | VarLoc r -> Name.is_anyreg r
-      | _        -> false
     in
     let isvar_lhs = Name.is_anyvar <.> locv
     in
     let isloc_actually f =
       match f.fnode with
       | Fvar _                      -> true
-      | ArraySel ({fnode=Fvar _},_) -> true
       | _                           -> false
     in
     let ispmsc_lhs = Name.is_pmsc <.> locv
@@ -186,7 +182,7 @@
     in
     (* check no repetitions on lhs *)
     if not (nodups (=) (List.concat lefts)) then
-      bad ("some of the lhs elements are repeated") (* and what do we do with arrays? Hmm? *)
+      bad ("some of the lhs elements are repeated") 
     ;
     (* first split: registers or vars on lhs? *)
     if List.for_all (List.for_all isreg_lhs) lefts then
@@ -219,10 +215,6 @@
              match e.fnode with
              | Fvar (Here,Now,v) -> VarLoc v
              | Fvar _            -> bad ("temporal variable " ^ string_of_formula e ^ " on rhs of assignment")
-             | ArraySel ({fnode=Fvar (Here,Now,v)},ixf) 
-                                 -> ArrayLoc (v,check_anypure true binders ixf) 
-             | ArraySel ({fnode=Fvar _} as v,_)
-                                 -> bad ("temporal array variable " ^ string_of_formula v ^ " on rhs of assignment")
              | _                 -> raise (Invalid_argument ("loc_rhs " ^ string_of_formula e))
            in
            let rights = List.map loc_rhs rights in
@@ -239,12 +231,6 @@
                       bad ("cannot assign value from auxiliary variable " ^ string_of_var v ^
                            " to " ^ prefixed_phrase_of_list string_of_reg "actual register" "actual registers" rs
                           )
-                | ArrayLoc (v,ixf) ->
-                    if is_auxloc loc then
-                      bad ("cannot assign value from auxiliary array reference " ^ string_of_location loc ^
-                           " to " ^ prefixed_phrase_of_list string_of_reg "actual register" "actual registers" rs
-                          );
-                    ignore (check_realpure true binders ixf)
                )
            in
            check_single true (List.hd rslocs);
@@ -545,8 +531,6 @@
 %token IMPLIES IFF AND OR NOT EXISTS FORALL
 %token HAT
 
-%token ARRAYSTORE ARRAYMAPS
-
 %left COMMA
 /* %nonassoc AT */
 %right SINCE
@@ -557,9 +541,6 @@
 %nonassoc LESS LESSEQUAL EQUAL NOTEQUAL GREATEREQUAL GREATER
 %left PLUS MINUS
 %left TIMES DIV MOD
-
-%left ARRAYMAPS
-%left ARRAYSTORE
 
 %token SOFAR OUAT COHERE COHEREVAR FANDW /* SITF */ LATEST
 %token BFR UNIV SINCE
@@ -873,7 +854,6 @@ lhs:
 
 location:
   | name                                {VarLoc $1}
-  | name SQBRA formula SQKET            {ArrayLoc ($1,$3)}
 
 loclist:
   | location                            {[$1]}
@@ -918,7 +898,6 @@ primary:
   | FALSE                               {fadorn(Fbool false)}
   | fname                               {$1} /* may actually be a macro_expand name, so expansion and adornment happens in fname */
   | LPAR formula RPAR                   {$2}
-  | primary SQBRA formula SQKET         {fadorn (ArraySel($1,$3)) } /* pureness gets checked elsewhere ... */
   | MINUS primary                       {fadorn(Negarith($2))} 
   | NOT primary                         {fadorn(Not($2))}
   | tcep SOFAR LPAR formula RPAR        {let pl, wh = $1 in
@@ -1047,13 +1026,10 @@ formula:
   | formula IFF formula                 {fadorn(LogArith($1,Iff,$3))}
   | formula IMPLIES formula             {fadorn(LogArith($1,Implies,$3))}
 
-  | formula ARRAYSTORE arraymaps        {let ixf, vf = $3 in fadorn (ArrayStore($1,ixf,vf))} /* pureness gets checked elsewhere */
   | formula SINCE formula               {fadorn (Since(Here,Now,$1,$3))} /* place, time done elsewhere */
   
   | formula COMMA formulas              {fadorn(Tuple($1::$3))}
 
-arraymaps:
-  | formula ARRAYMAPS formula           {$1,$3}
 boundnames:
   | locname                             {[$1]}
   | LPAR locnamelist RPAR               {$2}

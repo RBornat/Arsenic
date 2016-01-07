@@ -29,14 +29,12 @@ type sortinfo =
   | SimpleSort of sort 
   | TupleSort  of sort * func_decl
   | FuncSort   of sort * func_decl
-  | ArraySort  of sort
   | VarSort    of sort
 
 let sort_of_sortinfo = function
   | SimpleSort  s    -> s
   | TupleSort  (s,_) -> s
   | FuncSort   (s,_) -> s
-  | ArraySort  s     -> s
   | VarSort    s     -> s
 
 let rec string_of_sortinfo ctx = function 
@@ -47,5 +45,4 @@ let rec string_of_sortinfo ctx = function
   | FuncSort   (s,fdecl)  -> "FuncSort " ^ bracketed_string_of_pair (sort_to_string ctx) 
                                                                     (func_decl_to_string ctx) 
                                                                     (s,fdecl)
-  | ArraySort  s          -> "ArraySort " ^ sort_to_string ctx s
   | VarSort    s          -> "VarSort " ^ sort_to_string ctx s

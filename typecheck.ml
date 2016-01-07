@@ -35,7 +35,6 @@ and evaltype cxt t =
   | Int             -> t
   | TupleType ts    -> TupleType (List.map (evaltype cxt) ts)
   | FuncType (ts,t) -> FuncType (List.map (evaltype cxt) ts, evaltype cxt t)
-  | ArrayType t     -> ArrayType (evaltype cxt t)
   | FTypeVar s      -> (try evaltype cxt (cxt <@> s) with Not_found -> t)
   | VarType t       -> VarType (evaltype cxt t)
   
@@ -58,7 +57,6 @@ let rec unifytype cxt t1 t2 =
     (FuncType (t2s, tr2) as t2')                   -> 
       let cxt = unifylists (TypeUnifyError (t1',t2')) cxt t1s t2s in
       unifytype cxt tr1 tr2 
-  | ArrayType t1'         , ArrayType t2'          -> unifytype cxt t1' t2'
   | t1'                   , t2'                    -> if t1'=t2' then cxt 
                                                       else raise (TypeUnifyError (t1',t2'))
 
@@ -73,7 +71,6 @@ and canunifytype s cxt = function
   | Int             -> true
   | TupleType ts    -> List.for_all (canunifytype s cxt) ts
   | FuncType (ts,t) -> List.for_all (canunifytype s cxt) ts && canunifytype s cxt t
-  | ArrayType t     -> canunifytype s cxt t
   | FTypeVar s'     -> (match eval cxt s' with
                         | None    -> s<>s'
                         | Some t' -> canunifytype s cxt t'
@@ -160,10 +157,6 @@ let rec typeassign_formula cxt bcxt t f =
      | Sofar          (_,_,f) -> unary cxt bcxt Bool Bool f
      | Since      (_,_,f1,f2) -> binary cxt bcxt Bool Bool Bool f1 f2
      | Ite         (cf,tf,ef) -> ternary cxt bcxt t Bool t t cf tf ef
-     | ArraySel      (af,ixf) -> binary cxt bcxt t (ArrayType t) Int af ixf
-     | ArrayStore (af,ixf,vf) -> let eltype = new_FTypeVar () in
-                                 let artype = ArrayType eltype in
-                                 ternary cxt bcxt artype artype Int eltype af ixf vf
      | Cohere (v,f1,f2)       -> let cxt = unifytype cxt t Bool in
                                  let cxt, tv = typeassign_var cxt v in
                                  let cxt, bcxt = typeassign_formula cxt ((f,tv)::bcxt) tv f1 in
@@ -242,10 +235,6 @@ let completed_typeassign_formula_list cxt bcxt t fs =
 
 let typeassign_loc cxt bcxt = function
   | VarLoc v         -> let cxt, t = typeassign_var cxt v in (cxt, bcxt), t
-  | ArrayLoc (v,ixf) -> let t = new_FTypeVar () in
-                        let cxt = assigntype cxt (ArrayType t) v in
-                        let cxt, bcxt = typeassign_formula cxt bcxt Int ixf in
-                        (cxt, bcxt), t
 
 let typeassign_assign cxt bcxt a =
   let doit cxt bcxt loc fs = 

@@ -101,7 +101,6 @@ let loces = function
 let frees assign = 
   let loc_frees = function
     | VarLoc         v -> NameSet.singleton v
-    | ArrayLoc (v,ixf) -> NameSet.add v (Formula.frees ixf)
   in
   match assign with
   | RbecomesE  (r,e)       -> NameSet.add r (Formula.frees e) 
@@ -118,34 +117,21 @@ let frees assign =
 let formulas fs = function
   | RbecomesE (r,e)         -> e::fs
   | LocbecomesEs (b,loces)  -> 
-      List.fold_left (fun fs -> (function (VarLoc v,e)         -> e::fs
-                                 |        (ArrayLoc (v,ixf),e) -> ixf::e::fs
-                                )
-                     )
+      List.fold_left (fun fs -> (function (VarLoc v,e)         -> e::fs))
                      fs
                      loces
   | RsbecomeLocs (b,rslocs) -> 
-      List.fold_left (fun fs -> (function (_,VarLoc v)         -> fs
-                                 |        (_,ArrayLoc (v,ixf)) -> ixf::fs
-                                )
-                     )
+      List.fold_left (fun fs -> (function (_,VarLoc v)         -> fs))
                      fs
                      rslocs
 
 let assigned = function
   | RbecomesE (r,e)        -> NameSet.singleton r
-  | LocbecomesEs (b,loces) -> NameSet.of_list (List.map (function (VarLoc v,e)       -> v
-                                                         |        (ArrayLoc (v,_),e) -> v
-                                                        )
-                                                        loces
-                                              )
+  | LocbecomesEs (b,loces) -> NameSet.of_list (List.map (function (VarLoc v,e)       -> v) loces)
   | RsbecomeLocs (b,rsv_s) -> NameSet.of_list (List.concat (fstof2 (List.split rsv_s)))
 
 let optmap af ff a =
-  let opmloc = function VarLoc v         -> None
-               |        ArrayLoc (v,ixf) -> Formula.optmap ff ixf 
-                                            &~~ (_Some <.> _ArrayLoc v)
-  in
+  let opmloc = function VarLoc v -> None in
   match af ff a with
   | None -> (match a with 
              | RbecomesE (r,e)         -> optmap ff e 
@@ -164,10 +150,7 @@ let map af ff = anyway (optmap af ff)
 
 let substitute mapping = function (* does locs as well *)
   | LocbecomesEs (b,loces) -> 
-      LocbecomesEs (b,List.map (function (VarLoc v,e)         -> VarLoc v, Formula.substitute mapping e
-                                |        (ArrayLoc (v,ixf),e) -> ArrayLoc (v, Formula.substitute mapping ixf),
-                                                                 Formula.substitute mapping e
-                               ) 
+      LocbecomesEs (b,List.map (function (VarLoc v,e) -> VarLoc v, Formula.substitute mapping e) 
                                loces
                    ) 
   | a                    -> a

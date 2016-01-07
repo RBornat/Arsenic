@@ -391,10 +391,6 @@ let z3check_query question task noisy assertions query =
                                            (Array.of_list ss)
                  in
                  TupleSort (tsort, tmakef)
-             | ArrayType t  ->
-                 let s = sort_of_sortinfo (memofun t) in
-                 let asort = mk_array_sort z3context (sort_of_sortinfo (memofun Int)) s in
-                 ArraySort asort
              | FuncType _   -> 
                  (* we can't do functional programming: unnamed functions don't have a sort. *)
                  raise (Crash ("unnamed " ^ string_of_ftype t ^ " in sortinfo_of_type with typecxt = [\n\t" ^
@@ -537,8 +533,6 @@ let z3check_query question task noisy assertions query =
                     notbsort f
                  )
              | Ite (cf,tf,ef)              -> mk_ite z3context (aof cf) (aof tf) (aof ef)
-             | ArraySel (af,ixf)           -> mk_select z3context (aof af) (aof ixf)
-             | ArrayStore (af,ixf,vf)      -> mk_store z3context (aof af) (aof ixf) (aof vf)
              | App (n, fs)                 -> 
                  let ndecl = name_fdecl_cxt <@> n in
                  mk_app z3context ndecl (Array.of_list (List.map aof fs))

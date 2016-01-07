@@ -1,3 +1,9 @@
+(* This file is part of Arsenic, a proofchecker for New Lace logic.
+   Copyright (c) 2015-2016 Richard Bornat.
+   Licensed under the MIT license (sic): see LICENCE.txt or
+   https://opensource.org/licenses/MIT
+ *)
+ 
 open Function
 open Option
 open Tuple
@@ -6,12 +12,6 @@ open Name
 open Listutils
 open MySet
 
-(* This file is part of Arsenic, a proofchecker for New Lace logic.
-   Copyright (c) 2015 Richard Bornat.
-   Licensed under the MIT license (sic): see LICENCE.txt or
-   https://opensource.org/licenses/MIT
- *)
- 
 exception Error of string
 
 type formula = {fpos: sourcepos; fnode: formulanode}
@@ -31,8 +31,6 @@ and formulanode =
   | LogArith     of formula * boolop * formula
   | Compare      of formula * compareop * formula
   | Ite          of formula * formula * formula (* Ite only in assertions, people! *)
-  | ArraySel     of formula * formula
-  | ArrayStore   of formula * formula * formula
   | Binder       of bkind * name * formula (* name should be reg or var *)
   | Tuple        of formula list
   
@@ -106,8 +104,6 @@ let _Forall    n f         = Binder (Forall,n,f)
 let _Exists    n f         = Binder (Exists,n,f)
 let _Tuple     fs          = Tuple fs
 let _Ite       cf tf ef    = Ite (cf,tf,ef)
-let _ArraySel  af ixf      = ArraySel (af,ixf)
-let _ArrayStore af ixf vf  = ArrayStore (af,ixf,vf)
 let _Bfr       pl wh f     = Bfr (pl,wh,f)
 let _U         wh f        = Univ (wh,f)
 let _Univ                  = _U
@@ -164,10 +160,6 @@ let _recLess         f1 f2 = _recCompare f1 Less         f2
 let _recLessEqual    f1 f2 = _recCompare f1 LessEqual    f2
 
 let _recIte = _frec <...> _Ite
-
-let _recArraySel = _frec <..> _ArraySel
-
-let _recArrayStore = _frec <...> _ArrayStore
 
 let _recBinder bk n f = _frec (_Binder bk n f)
 
@@ -387,8 +379,6 @@ let since_token     = "since"
 let m_Latest_token  = "latest"
 let cohere_token    = "_c"
 let coherevar_token = "_cv"
-let arraystore_token = "++"
-let arraymaps_token   = "->"
 
 (* let string_of_SOMEWHERE  = "faiaf" (* far away in a forest *)
    let string_of_EVERYWHERE = "Univ"  (* universal -- too important to be twee? *)
@@ -424,10 +414,6 @@ let arithprio = function
 let primaryprio             =  NonAssoc, 1000
 let abitlessthanprimaryprio =  NonAssoc, 900
 
-let arrayselprio            = Left, 1000 (* like a primary, I think, but left assoc *)
-let arraystoreprio          = Left, 300  (* looser than any operator *)
-let arraymapsprio           = Left, 290  (* just tighter than store *)
-
 let string_of_prio = bracketed_string_of_pair string_of_prioritydir string_of_int
 
 let mustbracket_left (lassoc,lprio) (supassoc, supprio) =
@@ -449,8 +435,6 @@ let formulaprio f =
   | Compare (left, cop, right)  -> compprio cop
   | LogArith(left, lop, right)  -> logprio lop
   | Ite    _                    -> primaryprio
-  | ArraySel _                  -> arrayselprio 
-  | ArrayStore _                -> arraystoreprio
   | Binder _                    -> primaryprio
   | Tuple  _                    -> commaprio
   | Since  _                    -> Left, 5 (* below Implies *)
@@ -553,8 +537,6 @@ let rec string_of_primary f =
       | App (n,fs)             -> string_of_name n ^ "(" ^ string_of_args fs ^ ")"
       | Sofar (pl,wh,f)        -> string_of_prefixSofar pl wh ^ bracketed_string_of_formula f
       | Cohere (v,f1,f2)       -> cohere_token ^ "(" ^ string_of_var v ^ "," ^ string_of_args [f1;f2] ^ ")"
-      | ArraySel (af,ixf)      -> let afprio = formulaprio af in
-                                  bracket_left afprio arrayselprio af ^ "[" ^ string_of_formula ixf ^ "]"
       | Latest (pl,wh,v)       -> string_of_pl pl ^ string_of_wh wh ^ m_Latest_token ^ "(" ^ string_of_var v ^ ")"
       | _                      -> bracketed_string_of_formula f
 
@@ -591,7 +573,6 @@ and string_of_formula f =
   | App          _  
   | Sofar        _ 
   | Cohere       _            
-  | ArraySel     _              
   | Latest       _              -> string_of_primary f
   | Arith   (left, aop, right)  -> string_of_binary_formula left right (string_of_arithop   aop) (arithprio aop)
   | Compare (left, cop, right)  -> string_of_binary_formula left right (string_of_compareop cop) (compprio cop)
@@ -605,9 +586,6 @@ and string_of_formula f =
                                    bracketed_string_of_formula {f with fnode=Since(Here,Now,left,right)}
   | Threaded (tid,tf)           -> string_of_binary_formula tf (formula_of_threadid tid) "@" (formulaprio f)
   | Tuple fs                    -> string_of_args fs
-  | ArrayStore(af,ixf,vf)       -> bracket_left (formulaprio af) arraystoreprio af 
-                                   ^ arraystore_token
-                                   ^ string_of_binary_formula ixf vf arraymaps_token arraymapsprio
 
 and bracket_left lprio fprio = if mustbracket_left lprio fprio then bracketed_string_of_formula 
                                                                else string_of_formula
@@ -728,8 +706,6 @@ let indented_string_of_formula just_log indent f =
       | Sofar          (_,_,f) -> one_liner f && ok_width ()
       | Cohere       (_,f1,f2) -> one_liner f1 && one_liner f2 && ok_width ()
       | Threaded         (_,f) -> one_liner f && ok_width ()
-      | ArraySel      (af,ixf) -> one_liner af && one_liner ixf && ok_width ()
-      | ArrayStore (af,ixf,vf) -> one_liner af && one_liner ixf && one_liner vf && ok_width ()
     and padded_prefix opstr = opstr ^ " " 
     and bracket_lines lpar rpar = function
       | []   , _ -> raise (Invalid_argument "isf_lines.bracket_lines []")
@@ -847,19 +823,6 @@ let indented_string_of_formula just_log indent f =
         | Sofar (pl,wh,f)             -> isf_app (string_of_prefixSofar pl wh) [f]
         | Cohere (v,f1,f2)            -> isf_app cohere_token [_recFname v; f1; f2]
         | Threaded (tid,tf)           -> isb tf (formula_of_threadid tid) " @ " (formulaprio f)
-        | ArraySel (af,ixf)           -> let aflines = 
-                                           if one_liner af then do_one (revargs (^) " [" <.> string_of_formula) af 
-                                                           else bracket_lines "(" ") [" (isf_lines max_width af)
-                                         in
-                                         let ixflines = isf_lines (max_width-tabsize) ixf in 
-                                         let lastlines = ["]"],1 in
-                                         concat_blocks [aflines; pad_lines tabsize ixflines; lastlines]
-        | ArrayStore (af,ixf,vf)     -> let aflines = pad_lines tabsize (isf_lines (max_width-tabsize) af) in
-                                        let storelines = [arraystore_token],String.length arraystore_token in
-                                        let ixflines = pad_lines (2*tabsize) (isf_lines (max_width-2*tabsize) ixf) in 
-                                        let mapslines = pad_lines tabsize ([arraymaps_token], String.length arraymaps_token) in
-                                        let vflines = pad_lines (2*tabsize) (isf_lines (max_width-2*tabsize) vf) in
-                                        concat_blocks [aflines; storelines; ixflines; mapslines; vflines]
   in
   let lines = isf_lines max_width f in
   String.concat "\n" (""::(fstof2 (pad_lines indent lines))@[""])
@@ -890,8 +853,6 @@ let optexists (optp: formula -> 'a option) f =
       | Binder    (_,n,f)     -> ef f (* really: catch it in p if you are implementing binders *)
       | Tuple     fs          -> optfirst ef fs
       | Ite       (cf,f1,f2)  -> optfirst ef [cf;f1;f2]
-      | ArraySel  (af,ixf)    -> optfirst ef [af;ixf]
-      | ArrayStore (af,ixf,vf) -> optfirst ef [af;ixf;vf]
       | Since     (_,_,f1,f2) -> optfirst ef [f1;f2]
       | Bfr       (_,_,f)     -> ef f
       | Univ      (_,f)       -> ef f
@@ -927,8 +888,6 @@ let optfold (optp: 'a -> formula -> 'a option) x =
         | Binder    (_,n,f)     -> ofold x f (* really!: catch it in optp if you are doing binders *)
         | Tuple     fs          -> optfold ofold x fs
         | Ite       (cf,tf,ef)  -> optfold ofold x [cf;tf;ef]
-        | ArraySel  (af,ixf)    -> optfold ofold x [af;ixf]
-        | ArrayStore(af,ixf,vf) -> optfold ofold x [af;ixf;vf]
         | Since     (_,_,f1,f2) -> optfold ofold x [f1;f2]
         | Bfr       (_,_,f)     -> ofold x f
         | Univ      (_,f)       -> ofold x f
@@ -969,8 +928,6 @@ let optmap ff f =
                           | Binder   (bk,n,f)     -> trav f &~~ take1 (_Binder bk n)
                           | Tuple    fs           -> optmap_any trav fs &~~ take1 _Tuple
                           | Ite      (cf,tf,ef)   -> trav3 cf tf ef &~~ take3 _Ite
-                          | ArraySel (af,ixf)     -> trav2 af ixf &~~ take2 _ArraySel
-                          | ArrayStore (af,ixf,vf)-> trav3 af ixf vf &~~ take3 _ArrayStore
                           | Since    (pl,wh,f1,f2)-> trav2 f1 f2 &~~ take2 (_Since pl wh)
                           | Bfr      (pl,wh,f)    -> trav f &~~ take1 (_Bfr pl wh)
                           | Univ     (wh,f)       -> trav f &~~ take1 (_Univ wh)
@@ -1038,8 +995,6 @@ let optmapfold ff x f =
                        | Binder    (bk,n,f)   -> unary f (_recBinder bk n)
                        | Tuple     fs         -> nary fs _recTuple
                        | Ite       (cf,tf,ef) -> ternary cf tf ef _recIte
-                       | ArraySel  (af,ixf)   -> binary af ixf _recArraySel
-                       | ArrayStore (af,ixf,vf) -> ternary af ixf vf _recArrayStore
                        | Since  (pl,wh,f1,f2) -> binary f1 f2 (_recSince pl wh)
                        | Bfr       (pl,wh,f)  -> unary f (_recBfr pl wh)
                        | Univ      (wh,f)     -> unary f (_recUniv wh)

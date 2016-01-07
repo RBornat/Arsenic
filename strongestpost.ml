@@ -206,7 +206,6 @@ let strongest_post with_result pre assign =
     let effect (loc,e) =
       match loc with
       | VarLoc v         -> _recEqual (_recFname v) (sub e) (* sub e for register assignments *)
-      | ArrayLoc (v,ixf) -> _recEqual (_recFname v) (_recArrayStore (old_name v) ixf e)
     in
     conjoin (sub pre 
              :: (if !Settings.sp_unchanged then unchanged else _recTrue)
@@ -217,7 +216,6 @@ let strongest_post with_result pre assign =
   | RbecomesE  (r,e)        -> sp_multiple false [r, old_name r] [VarLoc r] [e]
   | LocbecomesEs (b,loces)  -> let locs, es = List.split loces in
                                sp_multiple true (List.map (function VarLoc v         -> v, old_name v
-                                                           |        ArrayLoc (v,ixf) -> v, old_name v 
                                                           )
                                                           locs
                                                 )

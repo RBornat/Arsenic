@@ -39,9 +39,6 @@ let ext_stable_checks with_scloc hatting assertion irec =
     if with_scloc && !Settings.param_SCloc then
       List.map (function VarLoc v         -> let v = _recFname v in
                                              _recEqual v (hatted hatting v)
-                |        ArrayLoc (v,ixf) -> let v = _recFname v in
-                                             let arraysel = _recArraySel v ixf in
-                                             _recEqual arraysel (hatted hatting arraysel)
                )
                (fstof2 (List.split (Assign.loces instance.i_assign)))
     else []

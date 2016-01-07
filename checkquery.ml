@@ -94,7 +94,7 @@ let check_query prefix query =
           let scq = Stability.sc_stable_query_intfdesc p i in
           Printf.printf "\nsc stability\n%s\n" (show_query assertions scq);
           tautZ3 scq assertions;
-          let satq, extq = Stability.ext_stable_queries_intfdesc p i in
+          let satq, extq = Stability.ext_stable_queries_intfdesc Strongestpost.ExtHat p i in
           Printf.printf "\next stability\n_sat(%s) =>\n%s\n" (string_of_formula satq) (show_query assertions extq);
           (match satZ3 satq assertions with 
            | Invalid _ -> Printf.printf "\nUnsat, therefore Valid\n"

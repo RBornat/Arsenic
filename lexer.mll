@@ -108,10 +108,7 @@ rule make_token = parse
   | ':'         {COLON}
   | '|'         {BAR}
   | '.'         {DOT}
-  
-  | "++"        {ARRAYSTORE}
-  | "->"        {ARRAYMAPS}
-    
+      
 (* | '_'        {UNDERSCORE} *)
   
   | "true"      {TRUE}
