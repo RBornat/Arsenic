@@ -916,7 +916,7 @@ primary:
   | COHERE LPAR name COMMA formula COMMA formula RPAR
                                         {if not (is_anyvar $3) then 
                                            bad (string_of_name $3 ^ " should be variable in coherence formula");
-                                         fadorn (Cohere ($3,$5,$7))
+                                         fadorn (Cohere ($3, check_anypure true $5, check_anypure true $7))
                                         }
   | COHEREVAR LPAR name RPAR            {if !Settings.allow_tcep then 
                                            fadorn (_App (Formula.coherevar_token) 
