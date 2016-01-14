@@ -1,5 +1,5 @@
-# proof with -Sprop false; 
-# failure with -Sprop true:
+# proof with -LocalSpec true; 
+# failure with -LocalSpec false:
 #   lo-parallel line 17
 #   lo-parallel line 18
 #   inclusion line 20
