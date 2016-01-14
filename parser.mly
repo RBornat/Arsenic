@@ -55,18 +55,16 @@
     let allowed = reg_allowed::"numbers"::"booleans"::logc_allowed in
     phrase_of_list id ", " " and " allowed
     
-  let check_pureness ok_auxreg ok_logc binders formula = 
+  let check_pureness ok_auxreg ok_logc formula = 
     let ok_r r = ok_auxreg || is_realreg r in
     let rec cp (badfs,set) f = match f.fnode with
-      | Flogc n            -> if (* not (NameSet.mem n binders) && *) not (ok_logc) 
+      | Flogc n            -> if not (ok_logc) 
                               then Some (badfs,addname n set) 
                               else None
-      | Freg  r            -> if (* not (NameSet.mem r binders) && *) not (ok_r r) 
+      | Freg  r            -> if not (ok_r r) 
                               then Some (badfs,addname r set)
                               else None
-      | Fvar  (Here,Now,v) -> if (* not (NameSet.mem v binders) *) true
-                              then Some (badfs, addname v set)
-                              else None
+      | Fvar  (Here,Now,v) -> Some (badfs, addname v set)
       | Fvar       _ 
       | Ite        _
       | Binder     _   
@@ -149,7 +147,7 @@
   (* filtering assigns -- parsed as lhs list := formula list, where each lhs is a
      list of Assign.location. All lists are non-empty -- see loclist and formulas entries in parser
    *)
-  let classify_assign ok_logc is_com binders (lefts,assignop,rights) =
+  let classify_assign ok_logc is_com (lefts,assignop,rights) =
     let string_of_lhs = function
       | [a] -> string_of_location a
       | lhs -> "(" ^ string_of_list string_of_location "," lhs ^ ")"
@@ -314,12 +312,12 @@
          (* if the left is real location and the right is a tuple, first tuple element must be real *)
          (match is_auxloc loc, e.fnode with
           | true, Tuple (f::fs) ->
-              ignore (check_realpure ok_logc binders f);
-              List.iter (ignore <.> check_anypure ok_logc binders) fs
+              ignore (check_realpure ok_logc f);
+              List.iter (ignore <.> check_anypure ok_logc) fs
           | true, _ ->
-              ignore (check_realpure ok_logc binders e)
+              ignore (check_realpure ok_logc e)
           | false, _ ->
-              ignore (check_anypure ok_logc binders e)
+              ignore (check_anypure ok_logc e)
          )
        in
        check_single true (List.hd loces);
@@ -357,11 +355,11 @@
            )
       )
        
-  let check_intf_assign binders assign = 
-    classify_assign true false binders assign 
+  let check_intf_assign assign = 
+    classify_assign true false assign 
    
   let check_conditional_assign assign =
-    match classify_assign true true NameSet.empty assign with
+    match classify_assign true true assign with
     | LocbecomesEs (true,_) (*as a*) -> bad "store-conditional not supported. Sorry." (*; a*)
     | _                              -> bad ("conditional assignment must be store-conditional")
     
@@ -766,7 +764,7 @@ order:
 scomnode:
   | SKIP                                { Skip                                   }
   | ASSERT formula                      { Assert (check_assertion false $2)      }
-  | assign                              { let a = classify_assign true true NameSet.empty $1 in
+  | assign                              { let a = classify_assign true true $1 in
                                           if Assign.is_storeconditional a then
                                             report (Error (get_sourcepos(),
                                                            "store-conditional as command, not control condition"
@@ -934,8 +932,8 @@ primary:
                                         }   
  */
   
-  | place LPAR formula RPAR          {tcep_apply $1 Now $3}
-  | time LPAR formula RPAR             {tcep_apply Here $1 $3}
+  | place LPAR formula RPAR             {tcep_apply $1 Now $3}
+  | time LPAR formula RPAR              {tcep_apply Here $1 $3}
   
 /* we're parsing Apps now, but the only use is for macro_expand macros */
   | NAME LPAR formulalist RPAR          { match macro_expand $1 (Some $3) with
@@ -1068,7 +1066,7 @@ interferes:
 
 interference:
   | idescription                        {let binders, (pre, assign) = $1 in
-                                         let assign = check_intf_assign binders assign in
+                                         let assign = check_intf_assign assign in
                                          intfadorn {i_binders  = binders;
                                                     i_pre      = pre;
                                                     i_assign   = assign
@@ -1098,7 +1096,7 @@ query:
   | formula Q_AGAINST interference       {Qstableformula ($1,$3)}
   | interference Q_AGAINST interference  {Qstableintf ($1,$3)}
   | Q_SP LPAR formula SEMICOLON assign RPAR IMPLIES formula
-                                        {Qspimplies ($3,classify_assign true true NameSet.empty $5, $8)}
+                                        {Qspimplies ($3,classify_assign true true $5, $8)}
                                         
 queries:
   | EOP                                 {[]}
