@@ -637,7 +637,7 @@ let check_constraints_thread preopt postopt labmap opgraph thread =
   in
   let check_constraints_simplecomtriplet knotmap ct =
     (* check the arity of the ipre option *)
-    (match ct.tripletof.sc_ipreopt, precondition_of_knot Interference ct.tripletknot with
+    (match ct.tripletof.sc_ipreopt, precondition_of_knot (fun _ _ -> true) Interference ct.tripletknot with
      | Some (IpreDouble _), PreSingle _ 
      | Some (IpreRes    _), PreSingle _ -> 
          report (Error (ct.tripletpos, "knot and command cannot generate reservation-interference precondition"))

@@ -106,7 +106,7 @@ let pre_fold fpre floc v = function
   
 let pre_iter fpre floc = pre_fold (fun () -> fpre) (fun () -> floc) () 
 
-let precondition_of_knot pkind knot =
+let precondition_of_knot go_sat pkind knot =
   let okres withres s = 
     match locopt_of_stitch s with
     | None   -> true
@@ -123,16 +123,21 @@ let precondition_of_knot pkind knot =
     | KnotOr      (k1,k2) 
     | KnotAlt     (k1,k2) -> disjoin (List.map (ass_k withres withgo) [k1;k2])
   in
-  let sat f = (* I hope this is ok ... maybe do it better one day *)
-    let frees = NameSet.filter (Name.is_anyvar <||> Name.is_anyreg) (Formula.frees f) in
-    Formula.bindExists frees f
-  in
+  (* this wasn't ok: quotienting isn't the same as sat. I think ...
+     let sat f = (* I hope this is ok ... maybe do it better one day *)
+       let frees = NameSet.filter (Name.is_anyvar <||> Name.is_anyreg) (Formula.frees f) in
+       Formula.bindExists frees f
+     in
+   *)
   let pre withres = 
     match pkind with
     | Interference   -> ass_k withres true knot
     | Elaboration    -> let e = ass_k withres false knot in
                         if exists (okres withres <&&> Stitch.is_go) knot then
-                          conjoin [e; sat (ass_k withres true knot)]
+                          (if go_sat knot.knotloc (ass_k withres true knot)
+                           then e
+                           else _recFalse (* not satisfiable with go in, so false *)
+                          )
                         else e
   in
   if exists (function {stitchlocopt=Some _} -> true
@@ -142,8 +147,8 @@ let precondition_of_knot pkind knot =
   then PreDouble (pre false, reservations knot, pre true)
   else PreSingle (pre false)
   
-let unres_precondition_of_knot pkind knot =
-  match precondition_of_knot pkind knot with
+let unres_precondition_of_knot go_sat pkind knot =
+  match precondition_of_knot go_sat pkind knot with
   | PreSingle pre       -> pre
   | PreDouble (pre,_,_) -> pre
   

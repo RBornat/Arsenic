@@ -78,8 +78,8 @@ module PKSCMap = MyMap.Make (struct type t = pkind * simplecom triplet
 
 let we_are_latest v = _recEqual (_recLatest Here Now v) (_recFname v)
 
-let cpre pk ct =
-  let defaultpre = precondition_of_knot pk ct.tripletknot in
+let cpre go_sat pk ct =
+  let defaultpre = precondition_of_knot go_sat pk ct.tripletknot in
   if Com.is_loadreserved ct then
     (match defaultpre with
      | PreSingle fpre            -> defaultpre
@@ -347,12 +347,21 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
   if !verbose then 
     Printf.printf "\nstarting thread %d" threadnum;
   
+  let go_sat loc ipre =
+    let stringfun () = Printf.sprintf "checking satisfiability of interference pre (includes go constraint) %s"
+                                      (string_of_formula ipre)
+    in
+    match ask_sat loc stringfun ipre with
+    | Invalid _ -> false (* unsatisfiable *)
+    | _         -> true  (* satisfiable or undecided *)
+  in
+  
   let cpre_of_ct = 
     curry2 (PKSCMap.vmemofun !verbose "cpre"
                              string_of_pkscmap_key
                              string_of_pre
                              id 
-                             (uncurry2 cpre)
+                             (uncurry2 (cpre go_sat))
            ) 
   in
 
@@ -386,7 +395,7 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
           (match source with
            | CEnode (_,b) -> 
                (match c with
-                | CExpr   ft -> let pre = precondition_of_knot pk ft.tripletknot in
+                | CExpr   ft -> let pre = precondition_of_knot go_sat pk ft.tripletknot in
                                 post_of_pre 
                                   (fun pre -> conjoin [pre; (if b then ft.tripletof else _recNot (ft.tripletof))])
                                   (justoneloc ft.tripletpos)
@@ -444,7 +453,7 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
      post, spopt
   in
   
-  let find_actual_ancestors memofun dummy =
+  let find_actual_ancestors memofun =
     let visited = ref NodeSet.empty in
     let aa (order,node) =
       if NodeSet.mem node !visited then ONSet.empty
@@ -458,7 +467,7 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
                 let fstitch set stitch =
                   ONSet.union set 
                     (onset_reorder order 
-                       (memofun dummy (order_of_stitch stitch, source_of_stitch stitch))
+                       (memofun (order_of_stitch stitch, source_of_stitch stitch))
                     )
                 in
                 let r = Knot.fold fstitch ONSet.empty ct.tripletknot in
@@ -473,11 +482,9 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
     aa
   in
   
-  let rec actual_ancestors dummy = 
-    ONMap.vmemofun !verbose "actual_ancestors" string_of_onode ONSet.to_string id 
-      (find_actual_ancestors actual_ancestors dummy)
-  in
-  let actual_ancestors = actual_ancestors ()
+  let actual_ancestors = 
+    ONMap.vmemorec !verbose "actual_ancestors" string_of_onode ONSet.to_string id 
+                   find_actual_ancestors
   in
   
   let intf_from (i,_) = 
@@ -1354,7 +1361,7 @@ let checkproof_prog {p_preopt=preopt; p_givopt=givopt; p_ts=threads; p_postopt=p
                     )
              );
     
-    (* proof obligation functions *)
+    (* proof obligation functions -- memoised *)
     let uncurried_doZ3 (q,v,sfun,a,gs) = AskZ3.doZ3 q v sfun a gs in
     let memo_do_Z3 = Z3Map.memofun z3key_of_z3query uncurried_doZ3 in
     let curried_doZ3 q v sfun a gs = 
@@ -1427,7 +1434,7 @@ let checkproof_prog {p_preopt=preopt; p_givopt=givopt; p_ts=threads; p_postopt=p
            in
            let tpost = function
              | i, {t_body=Threadfinal tpost} -> wrap i tpost
-             | i, {t_postopt=Some knot}      -> wrap i (unres_precondition_of_knot Elaboration knot)
+             | i, {t_postopt=Some knot}      -> wrap i (unres_precondition_of_knot (fun _ _ -> true) Elaboration knot)
              | _                             -> _recTrue
            in
            let tposts = conjoin (List.map tpost (numbered threads)) in
