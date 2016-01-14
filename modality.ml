@@ -16,6 +16,7 @@ open Typecheck
 exception Error of string
 let starts_with = Stringutils.starts_with
 
+(* bound variables don't get included in global coherence vars. Of course? *)
 let get_coherence_vars binders =
   let rec cof binders vset f = 
     match f.fnode with
@@ -309,8 +310,7 @@ let embed is_stabq bcxt cxt orig_f =
     in
     match f.fnode with
     | Fvar (_,_,v) 
-       when NameSet.mem v bounds 
-         || Stringutils.ends_with v "&new" ->
+       when Stringutils.ends_with v "&new" -> (* x!new isn't really a variable, doesn't have a history *)
         None
     | Fvar (pl,wh,v) ->
         let cxt, vv = process_var cxt pl wh v f in
@@ -444,15 +444,7 @@ let embed is_stabq bcxt cxt orig_f =
           )
     | Fandw (wh,ef) -> tevw cxt wh ef
     | Binder (fe, v, bf) ->
-        (* we add to bounds those things that don't need embedding *)
-        let bounds =
-          if Formula.exists (fun f -> match f.fnode with
-                                      | Cohere (v',_,_) -> v=v'
-                                      | _               -> false
-                            )
-                            bf
-          then bounds else NameSet.add v bounds
-        in
+        let bounds = NameSet.add v bounds in
         let cxt, bf' = anyway2 (opttsf bounds situation tn tidopt hiopt hicurr bcxt)
                                ((v,bcxt<@@>f)::cxt)
                                bf

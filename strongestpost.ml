@@ -55,22 +55,24 @@ let string_of_hatting = function
   | InflightHat -> "InflightHat"
 
 let hatted hatting orig_f =
-  let rec opt_hat binders f =
+  let rec opt_hat f =
     match f.fnode with
-    | Fvar(Here,Now,v)          -> if NameSet.mem v binders then None else Some (_recFvar There Now v)
+    | Fvar(Here,Now,v)          -> Some (_recFvar There Now v) (* even if it's bound *)
     | Bfr (Here,Now,bf)         -> if hatting=UExtHat 
-                                   then Some (_recBfr There Now (hat binders bf))
-                                   else Some f (* don't touch it! *) 
+                                   then Some (_recBfr There Now (hat bf))
+                                   else Some (conjoin [f; hat bf]) 
     | Univ (Now,uf)             -> Some f (* don't touch it! *) 
     | Latest (Here,Now,v)       -> if hatting=InflightHat 
                                    then Some (_recLatest There Now v)
                                    else Some f (* don't touch it! *)
     | Sofar (Here,Now,sf)       -> Some (_recSofar There Now sf)    (* is the place parameter just laziness? *)
     | Since (Here,Now,f1,f2)    -> Some (_recSince There Now f1 f2) (* is the place parameter just laziness? *)
-    | Binder (bk,n,bf)          -> (ohat (NameSet.add n binders) &~ (_Some <.> _recBinder bk n)) bf 
-                                   |~~ (fun () -> Some f) (* sorry, but this is essential: 
-                                                             bound variables can't be hatted
-                                                           *)
+    (* we hat even inside binders. Oh yes. *)
+    (* | Binder (bk,n,bf)          -> (ohat &~ (_Some <.> _recBinder bk n)) bf 
+                                      |~~ (fun () -> Some f) (* sorry, but this is essential: 
+                                                                bound variables can't be hatted
+                                                              *)
+     *)
     | Fvar    _           
     | Bfr     _           
     | Univ    _        
@@ -82,10 +84,10 @@ let hatted hatting orig_f =
                                                            )
                                          )
     | _                         -> None
-  and ohat binders = Formula.optmap (opt_hat binders)
-  and hat binders = Formula.map (opt_hat binders)
+  (* and ohat f = Formula.optmap opt_hat f *)
+  and hat f = Formula.map opt_hat f
   in
-  if hatting=NoHat then orig_f else Formula.map (opt_hat NameSet.empty) orig_f
+  if hatting=NoHat then orig_f else hat orig_f
 
 let optsp_substitute mapping orig_f =
   let isvarmapping mapping f = 
