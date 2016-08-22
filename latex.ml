@@ -99,7 +99,12 @@ let snametarget t =
   let s = !snamesource in
   snamemap := NameMap.add s t !snamemap
 
-let labmap = ref (Name.NameMap.empty : Name.name NameMap.t)
+let labmap = ref (Name.NameMap.of_assoc [("aa", "init" ); ("zz", "final"); 
+                                         ("bb", "beta" ); ("cc", "gamma");
+                                         ("dd", "delta")
+                                        ]: Name.name NameMap.t
+                 )
+
 let labsource = ref ""
 let labtarget t =
   let s = !labsource in
@@ -206,7 +211,7 @@ let rec latex_of_primary f =
     Printf.sprintf "%s(%s)" name args
   in
   match extract_shorthand f with
-  | Some (_,_,name,f) -> sname name ^ bracketed_latex_of_formula f
+  | Some (_,name,f) -> sname name ^ bracketed_latex_of_formula f
   | _                 ->
       match f.fnode with
       | Fint   i             -> i
@@ -220,13 +225,13 @@ let rec latex_of_primary f =
                                 ^ " " ^ sname "then" ^ " " ^ latex_of_formula tf
                                 ^ " " ^ sname "else" ^ " " ^ latex_of_formula ef
                                 ^ " " ^ sname "fi"
-      | Bfr (_,_,f)          -> latex_of_app (sname "Bfr")     (latex_of_formula f)
+      | Bfr (_,f)          -> latex_of_app (sname "Bfr")     (latex_of_formula f)
       | Univ   (_,f)         -> latex_of_app (sname "U")       (latex_of_formula f)
       | Fandw    (_,f)         -> latex_of_app (sname "Fandw")     (latex_of_formula f)
-      | Sofar (_,_,f)        -> latex_of_app (sname "sofar")   (latex_of_formula f)
+      | Sofar (_,f)        -> latex_of_app (sname "sofar")   (latex_of_formula f)
       | App (n,fs)           -> latex_of_app (latex_of_name n) (latex_of_args fs)
       | Cohere (v,f1,f2)     -> latex_of_app (latex_of_var v ^"_{c}") (latex_of_args [f1;f2])
-      | Latest _             -> raise (Error "latest not supported. Sorry") (*latex_of_app (sname "latest") (latex_of_var v)*)
+      (* | Latest _             -> raise (Error "latest not supported. Sorry") (*latex_of_app (sname "latest") (latex_of_var v)*) *)
       | _                    -> bracketed_latex_of_formula f
 
 and bracketed_latex_of_formula f = Printf.sprintf "(%s)" (latex_of_formula f)
@@ -256,7 +261,8 @@ and latex_of_formula f =
   | Bfr          _              
   | Univ         _              
   | Fandw        _
-  | Latest       _              -> latex_of_primary f
+  (* | Latest       _   *)           
+                                -> latex_of_primary f
   | Arith   (left, aop, right)  -> latex_of_binary_formula left right (latex_of_arithop   aop) (arithprio aop)
   | Compare (left, cop, right)  -> latex_of_binary_formula left right (latex_of_compareop cop) (compprio cop)
   | LogArith(left, lop, right)  -> 
@@ -264,7 +270,7 @@ and latex_of_formula f =
        | Some (_,_,cseq)        -> latex_of_cseq cseq
        | None                   -> latex_of_binary_formula left right (latex_of_logop     lop) (logprio lop)
       )
-  | Since   (_, _, left, right) -> latex_of_binary_formula left right (" " ^ sname "since" ^ " ") (formulaprio f)
+  | Since   (_, left, right)    -> latex_of_binary_formula left right (" " ^ sname "since" ^ " ") (formulaprio f)
   | Binder (bk, n, f)           -> 
       let ns, f = multibind bk [n] f in
       Printf.sprintf "%s%s(%s)"
@@ -319,24 +325,34 @@ let latex_of_node = function
 (* I doubt if this is right in complicated circumstances *)
 let latex_of_stitch { stitchorder      = order; 
                       stitchsource     = source;
-                      stitchlocopt     = locopt;
-                      stitchspopt      = spopt; 
+                      (* stitchlocopt     = locopt;
+                         stitchspopt      = spopt; 
+                       *)
                       stitchembroidery = assertion 
                     } =
-  Printf.sprintf "%s %s%s%s: %s" 
+  (* let spstuff =
+       match !lacing, spopt with
+       | Embroider, Some (SpostSimple f        ) -> Printf.sprintf " \\{%s\\}" (latex_of_formula f)
+       | Embroider, Some (SpostRes fres        ) -> Printf.sprintf " \\{ *:%s\\}" (latex_of_formula fres)
+       | Embroider, Some (SpostDouble (f, fres)) -> Printf.sprintf " \\{%s; *:%s\\}" (latex_of_formula f) (latex_of_formula fres)
+       | _                                       -> ""
+     in
+   *)
+  let trailer =
+    match !lacing with 
+    | Embroider -> Printf.sprintf ": %s" (latex_of_formula assertion)
+    | _         -> ""
+  in
+  Printf.sprintf "%s %s%s" 
                  (sname (Order.string_of_order order))
                  (latex_of_node source)
-                 (match locopt with
-                  | None     -> ""
-                  | Some loc -> Printf.sprintf "*%s" (latex_of_location loc)
-                 )
-                 (match spopt with
-                  | None                 -> ""
-                  | Some (SpostSimple f        ) -> Printf.sprintf " \\{%s\\}" (latex_of_formula f)
-                  | Some (SpostRes fres        ) -> Printf.sprintf " \\{ *:%s\\}" (latex_of_formula fres)
-                  | Some (SpostDouble (f, fres)) -> Printf.sprintf " \\{%s; *:%s\\}" (latex_of_formula f) (latex_of_formula fres)
-                 )
-                 (latex_of_formula assertion)
+                 (* (match locopt with
+                     | None     -> ""
+                     | Some loc -> Printf.sprintf "*%s" (latex_of_location loc)
+                    )
+                    spstuff
+                  *)
+                 trailer
 
 let knotdisjunction = latex_of_logop Or
 let knotconjunction = latex_of_logop And
@@ -360,11 +376,11 @@ let latex_of_knot =
   lok
 
 let latex_of_assign a =
-  let soa assignop lhs rhs = lhs ^ (string_of_assignop assignop) ^ rhs in
+  let soa lhs rhs = lhs ^ (string_of_assignop ()) ^ rhs in
   match a with
-  | RbecomesE (r,f) -> soa LocalAssign (latex_of_reg r) (latex_of_formula f)
-  | LocbecomesEs (b,loces) ->
-      (let op = if b then StoreConditional else LocalAssign in
+  | RbecomesE (r,f) -> soa (latex_of_reg r) (latex_of_formula f)
+  | LocbecomesEs (loces) ->
+      ( (* let op = if b then StoreConditional else LocalAssign in *)
        match loces with
        | [loc,e] ->
            let rhs =
@@ -372,7 +388,7 @@ let latex_of_assign a =
              | false, Tuple (e::_) -> e
              | _                   -> e
            in
-           soa op (latex_of_location loc) (latex_of_formula rhs)
+           soa (latex_of_location loc) (latex_of_formula rhs)
        | _     ->
            let locs, es = List.split loces in
            let string_of_rhs e =
@@ -381,10 +397,10 @@ let latex_of_assign a =
              | true, Tuple _       -> "(" ^ latex_of_formula e ^ ")"
              | _                   -> latex_of_formula e
            in
-           soa op (string_of_list latex_of_location "," locs) (string_of_list string_of_rhs "," es)
+           soa (string_of_list latex_of_location "," locs) (string_of_list string_of_rhs "," es)
       )
-  | RsbecomeLocs (b,rslocs) -> 
-      (let op = if b then LoadReserve else LocalAssign in
+  | RsbecomeLocs (rslocs) -> 
+      ( (* let op = if b then LoadReserve else LocalAssign in *)
        match rslocs with
        | [rs,loc] ->
            let lhs =
@@ -392,7 +408,7 @@ let latex_of_assign a =
              | false, r::_ -> [r]
              | _           -> rs
            in
-           soa op (string_of_list latex_of_reg "," lhs) (latex_of_location loc)
+           soa (string_of_list latex_of_reg "," lhs) (latex_of_location loc)
            
        | _      ->
            let rss, locs = List.split rslocs in
@@ -401,7 +417,7 @@ let latex_of_assign a =
              | [r] -> latex_of_reg r
              | _   -> "(" ^ string_of_list latex_of_reg "," rs ^ ")"
            in
-           soa op (string_of_list string_of_lhs "," rss) (string_of_list latex_of_location "," locs)
+           soa (string_of_list string_of_lhs "," rss) (string_of_list latex_of_location "," locs)
       )
 
 let lot lok sep latex_of_alpha {tripletknot=knot; tripletlab=lab; tripletof=alpha} =
@@ -431,13 +447,16 @@ let latex_of_simplecom sc =
 let rec latex_of_comtriplet trisep ct =
   let ipre, ipre_sep = 
     match use_cols(), !lacing, ct.tripletof.sc_ipreopt with
-    | true, Embroider, Some (IpreSimple pre)           -> 
+    | true, Embroider, Some pre           -> 
         latexcommand "ipre" None [latex_of_formula pre], " & \\\\ "
-    | true, Embroider, Some (IpreRes preres)           -> 
-        latexcommand "ipreres" None [latex_of_formula preres], " & \\\\ "
-    | true, Embroider, Some (IpreDouble (pre, preres)) -> 
-        latexcommand "ipredouble" None [latex_of_formula pre; latex_of_formula preres],
-        " & \\\\ "
+    (* | true, Embroider, Some (IpreSimple pre)           -> 
+        latexcommand "ipre" None [latex_of_formula pre], " & \\\\ "
+       | true, Embroider, Some (IpreRes preres)           -> 
+           latexcommand "ipreres" None [latex_of_formula preres], " & \\\\ "
+       | true, Embroider, Some (IpreDouble (pre, preres)) -> 
+           latexcommand "ipredouble" None [latex_of_formula pre; latex_of_formula preres],
+           " & \\\\ "
+     *)
     | _                                                -> "", ""
   in
   lot (fun k -> string_of_pair latex_of_knot id ipre_sep (k, ipre))
