@@ -64,14 +64,14 @@
       | Freg  r            -> if not (ok_r r) 
                               then Some (badfs,addname r set)
                               else None
-      | Fvar  (Here,Now,v) -> Some (badfs, addname v set)
+      | Fvar  (None,NoHook,v) -> Some (badfs, addname v set)
       | Fvar       _ 
       | Ite        _
       | Binder     _   
       | Since      _   
       | Bfr        _      
       | Univ       _      
-      | Latest     _      
+      (* | Latest     _     *) 
       | Cohere     _     
       | Threaded   _       -> Some (f::badfs, set)
       | _                  -> None
@@ -147,14 +147,14 @@
   (* filtering assigns -- parsed as lhs list := formula list, where each lhs is a
      list of Assign.location. All lists are non-empty -- see loclist and formulas entries in parser
    *)
-  let classify_assign ok_logc is_com (lefts,assignop,rights) =
+  let classify_assign ok_logc is_com (lefts (*,assignop *), rights) =
     let string_of_lhs = function
       | [a] -> string_of_location a
       | lhs -> "(" ^ string_of_list string_of_location "," lhs ^ ")"
     in
     let assign () = "assignment " ^ 
                     string_of_list string_of_lhs "," lefts ^
-                    (string_of_assignop assignop) ^
+                    ":=" (*(string_of_assignop assignop)*) ^
                     string_of_list string_of_formula "," rights
     in
     let bad_interferenceform () = 
@@ -211,7 +211,7 @@
            (* convert rhs formulas to locs *)
            let loc_rhs e =
              match e.fnode with
-             | Fvar (Here,Now,v) -> VarLoc v
+             | Fvar (None,NoHook,v) -> VarLoc v
              | Fvar _            -> bad ("temporal variable " ^ string_of_formula e ^ " on rhs of assignment")
              | _                 -> raise (Invalid_argument ("loc_rhs " ^ string_of_formula e))
            in
@@ -234,30 +234,32 @@
            check_single true (List.hd rslocs);
            List.iter (check_single false) (List.tl rslocs);
            (* that's it, I think *)
-           let b = 
-             match assignop, rslocs with
-             | LocalAssign     , _       -> false
-             | LoadReserve     , [_,loc] -> if is_auxloc loc then bad "auxiliary load_reserved" else true
-             | LoadReserve     , _       -> bad ("multi-location load_reserved " ^ string_of_assignop assignop ^
-                                                 " register assignment"
-                                                )
-             | StoreConditional, _       -> bad ("store-conditional operator " ^ string_of_assignop assignop ^
-                                                 " used in register assignment"
-                                                )
-           in
-           RsbecomeLocs (b, rslocs)
+           (* let b = 
+                match assignop, rslocs with
+                | LocalAssign     , _       -> false
+                | LoadReserve     , [_,loc] -> if is_auxloc loc then bad "auxiliary load_reserved" else true
+                | LoadReserve     , _       -> bad ("multi-location load_reserved " ^ string_of_assignop assignop ^
+                                                    " register assignment"
+                                                   )
+                | StoreConditional, _       -> bad ("store-conditional operator " ^ string_of_assignop assignop ^
+                                                    " used in register assignment"
+                                                   )
+              in
+            *)
+           RsbecomeLocs ((* b, *) rslocs)
        | []  , rights ->
            ((* it had better be a single-register assignment *)
-            match lefts, rights, assignop with
-            | [[loc]], [e], LocalAssign      -> RbecomesE (locv loc,e)
-            | [[loc]], [e], StoreConditional -> 
-                    bad ("store-conditional operator " ^ string_of_assignop assignop ^
-                         " used in register assignment"
-                        )
-            | _, _, LoadReserve                   ->
-                    bad ("load_reserved operator " ^ string_of_assignop assignop ^
-                         " used in register assignment with non-store rhs"
-                        )
+            match lefts, rights (*, assignop *) with
+            | [[loc]], [e] (*, LocalAssign *)     -> RbecomesE (locv loc,e)
+            (* | [[loc]], [e], StoreConditional -> 
+                       bad ("store-conditional operator " ^ string_of_assignop assignop ^
+                            " used in register assignment"
+                           )
+               | _, _, LoadReserve                   ->
+                       bad ("load_reserved operator " ^ string_of_assignop assignop ^
+                            " used in register assignment with non-store rhs"
+                           )
+             *)
             | _            ->
                 bad ("register:=formula assignment must have one register, one formula")
            )
@@ -323,22 +325,23 @@
        check_single true (List.hd loces);
        List.iter (check_single false) (List.tl loces);
        (* and that seems to be it *)
-       let b =
-         match loces, is_com, assignop with
-         | _      , _    , LocalAssign      -> false
-         | [loc,e], true , StoreConditional -> if is_auxloc loc then bad "auxiliary store-conditional"
-                                               else true
-         | _      , true , StoreConditional -> bad ("store-conditional operator " ^ string_of_assignop assignop ^
-                                                    " used in multi-location assignment"
-                                                   ) 
-         | _      , false, StoreConditional -> bad ("store-conditional operator " ^ string_of_assignop assignop ^
-                                                    " used in interference assignment"
-                                                   )
-         | _      , _    , LoadReserve      -> bad ("load_reserved operator " ^ string_of_assignop assignop ^
-                                                    " used in location assignment"
-                                                   )
-       in
-       LocbecomesEs (b, loces)
+       (* let b =
+            match loces, is_com, assignop with
+            | _      , _    , LocalAssign      -> false
+            | [loc,e], true , StoreConditional -> if is_auxloc loc then bad "auxiliary store-conditional"
+                                                  else true
+            | _      , true , StoreConditional -> bad ("store-conditional operator " ^ string_of_assignop assignop ^
+                                                       " used in multi-location assignment"
+                                                      ) 
+            | _      , false, StoreConditional -> bad ("store-conditional operator " ^ string_of_assignop assignop ^
+                                                       " used in interference assignment"
+                                                      )
+            | _      , _    , LoadReserve      -> bad ("load_reserved operator " ^ string_of_assignop assignop ^
+                                                       " used in location assignment"
+                                                      )
+          in
+        *)
+       LocbecomesEs ((* b, *) loces)
       )
     else
       (let regs, others = List.partition (is_lhs isreg_lhs) lefts in
@@ -358,10 +361,11 @@
   let check_intf_assign assign = 
     classify_assign true false assign 
    
-  let check_conditional_assign assign =
-    match classify_assign true true assign with
-    | LocbecomesEs (true,_) (*as a*) -> bad "store-conditional not supported. Sorry." (*; a*)
-    | _                              -> bad ("conditional assignment must be store-conditional")
+  (* let check_conditional_assign assign =
+       match classify_assign true true assign with
+       | LocbecomesEs (true,_) (*as a*) -> bad "store-conditional not supported. Sorry." (*; a*)
+       | _                              -> bad ("conditional assignment must be store-conditional")
+   *)
     
   let rec makebinder bindf locnames f = 
     match locnames with
@@ -369,21 +373,24 @@
     | (loc,n)::locnames -> let f = makebinder bindf locnames f in
                            Formula.fadorn (spos_of_sposspos loc f.fpos) (bindf n f)
                            
+  let no_hats pl f =
+    match pl with 
+    | None -> f
+    | _    -> bad ("can't apply " ^ string_of_pl pl ^ " to (" ^ string_of_formula f ^ ")")
+
+
   let tcep_apply pl wh f =
     let wrong s =
       bad ("can't apply " ^ s ^ " to (" ^ string_of_formula f ^ ")")
     in
     match f.fnode with
-    | Fvar  (Here,Now,v)     -> {f with fnode=Fvar (pl,wh,v)}
-    | Since (Here,Now,f1,f2) -> {f with fnode=Since(pl,wh,f1,f2)}
-    | Bfr   (Here,Now,bf)    -> {f with fnode=Bfr(pl,wh,bf)}
-    | Univ  (Now,uf)         -> (match pl with 
-                                 | Here -> {f with fnode=Univ(wh,uf)}
-                                 | _    -> wrong "(^)"
-                                )
+    | Fvar  (None,NoHook,v)  -> {f with fnode=Fvar (pl,wh,v)}
+    | Since (NoHook,f1,f2)   -> no_hats pl {f with fnode=Since(wh,f1,f2)}
+    | Bfr   (NoHook,bf)      -> no_hats pl {f with fnode=Bfr(wh,bf)}
+    | Univ  (NoHook,uf)      -> no_hats pl {f with fnode=Univ(wh,uf)}
     | _                      -> (match pl,wh with
-                                 | Here, Now -> f
-                                 | _ -> wrong (string_of_pl pl ^ string_of_wh wh)
+                                 | None, NoHook -> f
+                                 | _            -> wrong (string_of_pl pl ^ string_of_wh wh)
                                 )
       
   let check_knot knot =
@@ -502,7 +509,7 @@
     | _         -> ()
 
   type conditionthing =
-    | CTAssign of Location.location list list * Assign.assignop * Formula.formula list
+    | CTAssign of Location.location list list (* * Assign.assignop *) * Formula.formula list
     | CTExpr   of formula
 %}
 
@@ -527,7 +534,7 @@
 %token LESS LESSEQUAL EQUAL NOTEQUAL GREATEREQUAL GREATER
 /* logical operators */
 %token IMPLIES IFF AND OR NOT EXISTS FORALL
-%token HAT
+%token HAT DHAT TILDE DTILDE
 
 %left COMMA
 /* %nonassoc AT */
@@ -684,20 +691,21 @@ preknot:
   |                                     {knotadorn (SimpleKnot [])}
 
 ipreopt:
-  | LSSQBRA formula RSSQBRA             { Some (IpreSimple (check_assertion false $2)) }
-  | LSSQBRA QUERY formula RSSQBRA       { Some (IpreRes (check_assertion false $3)) }
-  | LSSQBRA formula SEMICOLON QUERY formula RSSQBRA 
-                                        { Some (IpreDouble (check_assertion false $2, 
-                                                            check_assertion false $5
-                                                           )
-                                               ) 
-                                        }
-  | LSSQBRA QUERY formula SEMICOLON formula RSSQBRA 
-                                        { Some (IpreDouble (check_assertion false $5, 
-                                                            check_assertion false $3
-                                                           )
-                                               ) 
-                                        }
+  | LSSQBRA formula RSSQBRA             { Some ((* IpreSimple *) (check_assertion false $2)) }
+  /* | LSSQBRA QUERY formula RSSQBRA       { Some (IpreRes (check_assertion false $3)) }
+     | LSSQBRA formula SEMICOLON QUERY formula RSSQBRA 
+                                           { Some (IpreDouble (check_assertion false $2, 
+                                                               check_assertion false $5
+                                                              )
+                                                  ) 
+                                           }
+     | LSSQBRA QUERY formula SEMICOLON formula RSSQBRA 
+                                           { Some (IpreDouble (check_assertion false $5, 
+                                                               check_assertion false $3
+                                                              )
+                                                  ) 
+                                           }
+   */
   |                                     { None }
 
 knot:
@@ -713,30 +721,34 @@ stitchlist:
   |                                     {[]}
 
 stitch:
-  | order node stitchlocopt stitchspopt COLON formula            
+  /* | order node stitchlocopt stitchspopt COLON formula            
                                         { stitchadorn $1 $2 $3 $4 (check_assertion false $6) }
+   */
+  | order node COLON formula            
+                                        { stitchadorn $1 $2 (check_assertion false $4) }
 
-stitchlocopt:
-  | QUERY location                      { Some ($2) }
-  |                                     { None }
+/* stitchlocopt:
+     | QUERY location                      { Some ($2) }
+     |                                     { None }
   
-stitchspopt:
-  | LBRACE formula RBRACE               { Some (SpostSimple (check_assertion false $2)) }
-  | LBRACE QUERY formula RBRACE         { Some (SpostRes (check_assertion false $3)) }
-  | LBRACE formula SEMICOLON QUERY formula RBRACE 
-                                        { Some (SpostDouble (check_assertion false $2, 
-                                                             check_assertion false $5
-                                                            )
-                                               ) 
-                                        }
-  | LBRACE QUERY formula SEMICOLON formula RBRACE 
-                                        { Some (SpostDouble (check_assertion false $5, 
-                                                             check_assertion false $3
-                                                            )
-                                               ) 
-                                        }
-  |                                     { None }
-  
+   stitchspopt:
+     | LBRACE formula RBRACE               { Some (SpostSimple (check_assertion false $2)) }
+     | LBRACE QUERY formula RBRACE         { Some (SpostRes (check_assertion false $3)) }
+     | LBRACE formula SEMICOLON QUERY formula RBRACE 
+                                           { Some (SpostDouble (check_assertion false $2, 
+                                                                check_assertion false $5
+                                                               )
+                                                  ) 
+                                           }
+     | LBRACE QUERY formula SEMICOLON formula RBRACE 
+                                           { Some (SpostDouble (check_assertion false $5, 
+                                                                check_assertion false $3
+                                                               )
+                                                  ) 
+                                           }
+     |                                     { None }
+ */
+ 
 node:
   | label                               { Cnode $1 }
   | label LPAR name RPAR                { CEnode ($1,
@@ -765,37 +777,44 @@ scomnode:
   | SKIP                                { Skip                                   }
   | ASSERT formula                      { Assert (check_assertion false $2)      }
   | assign                              { let a = classify_assign true true $1 in
-                                          if Assign.is_storeconditional a then
-                                            report (Error (get_sourcepos(),
-                                                           "store-conditional as command, not control condition"
-                                                          )
-                                                   );
+                                          (* if Assign.is_storeconditional a then
+                                               report (Error (get_sourcepos(),
+                                                              "store-conditional as command, not control condition"
+                                                             )
+                                                      );
+                                           *)
                                           Assign a
                                         }
-    
+ 
+ hatting:
+   | HAT                                { Hat }
+   | DHAT                               { DHat }
+   | TILDE                              { Tilde }
+   | DTILDE                             { DTilde }
+   
 /* for some reason this doesn't work if I use place and time or even tcep */
 fname:
   | LPAR MINUS RPAR NAME                { if NameMap.mem $4 !macros then
                                             bad ("macro_expand name " ^ string_of_name $4 ^ " follows (-)")
                                           else
-                                          if is_anyvar $4 then fadorn (Fvar (Here,Then,$4)) 
+                                          if is_anyvar $4 then fadorn (Fvar (None,Hook,$4)) 
                                           else
                                             bad (string_of_name $4 ^
                                                  " should be variable in order to follow (-)"
                                                 )
                                         }
-  | LPAR HAT RPAR NAME                  { if NameMap.mem $4 !macros then
+  | LPAR hatting RPAR NAME                  { if NameMap.mem $4 !macros then
                                             bad ("macro_expand name " ^ string_of_name $4 ^ " follows (^)")
                                           else
-                                          if is_anyvar $4 then fadorn (Fvar (There,Now,$4)) else
+                                          if is_anyvar $4 then fadorn (Fvar (Some $2,NoHook,$4)) else
                                             bad (string_of_name $4 ^
                                                  " should be variable in order to follow (^)"
                                                 )
                                         }
   | LPAR MINUS RPAR
-    LPAR HAT RPAR
+    LPAR hatting RPAR
     NAME                                { bad ($7 ^ " can't be both (^) and (-)") }
-  | LPAR HAT RPAR
+  | LPAR hatting RPAR
     LPAR MINUS RPAR
     NAME                                { bad ($7 ^ " can't be both (^) and (-)") }
   | NAME                                { match macro_expand $1 None with
@@ -805,42 +824,43 @@ fname:
   | PMSREG                              { fadorn (classify_var $1) }
 
 place:
-  | LPAR HAT RPAR                       {if !Settings.allow_tcep then There
-                                         else bad "(^) not allowed in assertions or formulae"
+  | LPAR hatting RPAR                   {if !Settings.allow_tcep then Some $2
+                                         else bad "hatting not allowed in assertions or formulae"
                                         }
-  |                                     {Here}
+  |                                     {None}
   
 time:
-  | LPAR MINUS RPAR                     {if !Settings.allow_tcep then Then
+  | LPAR MINUS RPAR                     {if !Settings.allow_tcep then Hook
                                          else bad "(-) not allowed in assertions or formulae"
                                         }
-  |                                     {Now}
+  |                                     {NoHook}
   
 tcep:
-  | LPAR HAT RPAR LPAR MINUS RPAR       {bad (if !Settings.allow_tcep then 
-                                                "cannot have both (^) and (-) prefixes"
+  | LPAR hatting RPAR LPAR MINUS RPAR       {bad (if !Settings.allow_tcep then 
+                                                "cannot have both hatting and (-) prefixes"
                                               else 
-                                                "(^) and (-) not allowed in assertions or formulae"
+                                                "hatting and (-) not allowed in assertions or formulae"
                                              )
                                         }
-  | LPAR MINUS RPAR LPAR HAT RPAR       {bad (if !Settings.allow_tcep then 
-                                                "cannot have both (-) and (^) prefixes"
+  | LPAR MINUS RPAR LPAR hatting RPAR       {bad (if !Settings.allow_tcep then 
+                                                "cannot have both (-) and hatting prefixes"
                                               else 
-                                                "(-) and (^) not allowed in assertions or formulae"
+                                                "(-) and hatting not allowed in assertions or formulae"
                                              )
                                         }
-  | LPAR HAT RPAR                       {if !Settings.allow_tcep then There, Now
-                                         else bad "(^) not allowed in assertions or formulae"
+  | LPAR hatting RPAR                       {if !Settings.allow_tcep then Some $2, NoHook
+                                         else bad "hatting not allowed in assertions or formulae"
                                         }
-  | LPAR MINUS RPAR                     {if !Settings.allow_tcep then Here, Then
+  | LPAR MINUS RPAR                     {if !Settings.allow_tcep then None, Hook
                                          else bad "(-) not allowed in assertions or formulae"
                                         }
-  |                                     {Here, Now}
+  |                                     {None, NoHook}
   
 assign:
-  | lhss BECOMES formulas               {$1,LocalAssign,$3}
-  | lhss LOADRESERVE formulas           {bad "load-reserve not supported. Sorry"(*; $1,LoadReserve,$3*)}
-  | lhss STORECONDITIONAL formulas      {bad "store-conditional not supported. Sorry"(*; $1,StoreConditional,$3*)}
+  | lhss BECOMES formulas               {$1 (*,LocalAssign *),$3}
+  /* | lhss LOADRESERVE formulas           {bad "load-reserve not supported. Sorry"(*; $1,LoadReserve,$3*)}
+     | lhss STORECONDITIONAL formulas      {bad "store-conditional not supported. Sorry"(*; $1,StoreConditional,$3*)}
+   */
   
 lhss:
   | lhs                                 {[$1]}
@@ -874,8 +894,9 @@ structcom:
 condition:
   | preknot ipreopt loclabel COLON conditionthing       
                                         { match $5 with
-                                          | CTAssign (locs, op, es) ->
-                                              let assign = check_conditional_assign (locs, op, es) in
+                                          | CTAssign (locs (*, op *), es) ->
+                                              (* let assign = check_conditional_assign (locs, op, es) in *)
+                                              let assign = classify_assign true true (locs, es) in
                                               if Assign.is_reg_assign assign && $2!=None then
                                                 bad "register assign with interference precondition";
                                               let scomnode = simplecomadorn $2 (Assign assign) in
@@ -887,7 +908,7 @@ condition:
                                         }
 
 conditionthing:
-  | assign                              { let (locs, op, es) = $1 in CTAssign (locs, op, es) }
+  | assign                              { let (locs (*, op *), es) = $1 in CTAssign (locs (*, op *), es) }
   | formula                             { CTExpr $1 }
   
 primary:
@@ -899,18 +920,18 @@ primary:
   | MINUS primary                       {fadorn(Negarith($2))} 
   | NOT primary                         {fadorn(Not($2))}
   | tcep SOFAR LPAR formula RPAR        {let pl, wh = $1 in
-                                         fadorn (Sofar (pl, wh, $4))
+                                         no_hats pl (fadorn (Sofar (wh, $4)))
                                         }
   | tcep OUAT LPAR formula RPAR         {let pl, wh = $1 in
-                                         fadorn (ouat pl wh $4).fnode
+                                         no_hats pl (fadorn (ouat wh $4).fnode)
                                         }
   | tcep LATEST LPAR latestname RPAR   
-                                        { bad "latest not supported. Sorry"(*;
+                                        { bad "latest not supported (yet, again). Sorry"(*;
                                           let pl, wh = $1 in
                                           fadorn (Latest (pl,wh,$4)) *)
                                         }
 /*
-  | time USOFAR LPAR formula RPAR      {fadorn (Univ ($1, fadorn (Sofar (Here, Now, $4))))}
+  | time USOFAR LPAR formula RPAR      {fadorn (Univ ($1, fadorn (Sofar (NoHook, $4))))}
  */
   
   | COHERE LPAR name COMMA formula COMMA formula RPAR
@@ -932,8 +953,8 @@ primary:
                                         }   
  */
   
-  | place LPAR formula RPAR             {tcep_apply $1 Now $3}
-  | time LPAR formula RPAR              {tcep_apply Here $1 $3}
+  | place LPAR formula RPAR             {tcep_apply $1 NoHook $3}
+  | time LPAR formula RPAR              {tcep_apply None $1 $3}
   
 /* we're parsing Apps now, but the only use is for macro_expand macros */
   | NAME LPAR formulalist RPAR          { match macro_expand $1 (Some $3) with
@@ -943,7 +964,7 @@ primary:
                                         }
   
   | tcep BFR LPAR formula RPAR          {let pl, wh = $1 in
-                                         fadorn (Bfr (pl,wh,$4))
+                                         no_hats pl (fadorn (Bfr (wh,$4)))
                                         }
   | time UNIV LPAR formula RPAR        {fadorn (Univ ($1,$4))}
   | time FANDW LPAR formula RPAR       {if !Settings.allow_tcep then fadorn (Fandw ($1,$4))
@@ -961,7 +982,7 @@ latestname:
                                           match macro_expand $1 None with
                                           | Some f ->
                                              (match f.fnode with
-                                              | Fvar (Here, Now, v) -> v
+                                              | Fvar (None, NoHook, v) -> v
                                               | _                   -> badname ()
                                              )
                                          | None   -> 
@@ -1026,7 +1047,7 @@ formula:
   | formula IFF formula                 {fadorn(LogArith($1,Iff,$3))}
   | formula IMPLIES formula             {fadorn(LogArith($1,Implies,$3))}
 
-  | formula SINCE formula               {fadorn (Since(Here,Now,$1,$3))} /* place, time done elsewhere */
+  | formula SINCE formula               {fadorn (Since(NoHook,$1,$3))} /* place, time done elsewhere */
   
   | formula COMMA formulas              {fadorn(Tuple($1::$3))}
 
