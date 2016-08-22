@@ -1,0 +1,18 @@
+# bo instability without _B assertions
+
+{ aa: m=f=0 }
+----------------------
+guarantee [f=0 | m:=1; m=1 | f:=1]
+
+{* lo aa: f=0 *}                        a:m:=1;
+{* lo a: m=1 *}                         b:f:=1
+------------------
+{*lo aa: true *}                        c:r1:=f;
+if {* lo c: r1=1=>f=1 *} bb: r1=1
+then
+    {*lo bb(t): r1=f=1; lo aa: m=0\/m=1 *}  d:r2:=m;
+    {*lo d: r1=f=1/\(r2=0=>m=0) *}          e:r3:=m
+fi
+{*lo e:r1=f=1/\(r2=0=>m=0) *} \/ {* lo bb(f): r1!=1 *}
+------------------
+{ zz: 1:r1=1/\1:r2=0=>m=0 }
