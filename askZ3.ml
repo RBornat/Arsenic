@@ -265,12 +265,12 @@ let z3check_query question task noisy assertions query =
          let state_params, state_paramtypes = List.split varmap in
          
          (* do the embedding *)
-         let embed is_stabq () =
+         let embed () =
            let modal_cxt, assertions = 
-             Listutils.mapfold (Modality.embed is_stabq binders) [] assertions 
+             Listutils.mapfold (Modality.embed binders) [] assertions 
            in
            let modal_cxt, query = 
-             Modality.embed is_stabq binders modal_cxt query
+             Modality.embed binders modal_cxt query
            in
            let coherencetypes =
              List.fold_left (fun set binding -> match extract_coherencetype binding with
@@ -287,22 +287,27 @@ let z3check_query question task noisy assertions query =
            let modal_cxt, axioms =
              embed_axiom (FtypeSet.elements coherencetypes) 
                          modal_cxt 
-                         (fandw Now (conjoin axioms)) 
+                         (fandw NoHook (conjoin axioms)) 
            in
            let assertions = assertions@axioms in
            modal_cxt, query, assertions
          in
-         (* if a query has hatting or hooking, then it's a stability query. Actually it's
-            if and only if, because since we embraced SCloc there is always x=xhat in 
-            stability queries.
+         (* If a query has (^) or (~) alone, then two threads.
+            If it has (^) and (^^) or ((~) and (~~) together, then three.
+            If it has Threaded, then count the threads.
+            Otherwise just one thread (it's an SC query, really it is).
           *)
+         let count_threads n f =
+           match f.fnode with
+           | Threaded (i, _)    -> Some (Pervasives.max n (i+1))
+           | Fvar(Some h, _, _) -> let i = Modality.tn_of_hat h in
+                                   Some (Pervasives.max n (i+1))
+           | _                  -> None
+         in
+         let tc = List.fold_left (Formula.fold count_threads) 1 (query::assertions) in
          let modal_cxt, query, assertions =
-         if List.exists (Formula.exists is_hatted) (query::assertions) then
-           Settings.temp_setting Thread.threadnum 0 (fun () ->
-             Settings.temp_setting Thread.threadcount 2 (embed true)
-           )
-         else
-           embed false ()
+           Settings.temp_setting Thread.threadnum 0 
+                                 (fun () -> Settings.temp_setting Thread.threadcount tc embed)
          in
          
          push_verbose (track_embedding ()) (fun () ->
@@ -540,7 +545,8 @@ let z3check_query question task noisy assertions query =
              | Since         _
              | Cohere        _     
              | Threaded      _     
-             | Latest        _ ->
+             (* | Latest        _ *)
+                                ->
                  raise (Invalid_argument ("askZ3.ast_of_formula\n" ^ explain_string_of_formula orig_f ^ "\ncontains " ^ string_of_formula f))
            in
            aof orig_f
