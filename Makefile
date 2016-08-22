@@ -13,6 +13,9 @@ ToLaTeX : *.ml *.mly *.mll
 Test : *.ml *.mly *.mll
 	ocamlbuild -yaccflag -v -lib unix -lib str tester.native
 
+Compile : *.ml *.mly *.mll
+	ocamlbuild -yaccflag -v -lib unix -lib str compiler.native
+
 newz3 : 
 	cd z3; git clone https://git.codeplex.com/forks/jjb/z3
 	make compilez3
@@ -24,7 +27,7 @@ pullz3 :
 compilez3 :
 	cd z3; rm -fr build; ./configure $(Z3CONFIG)
 	cd z3/build; make -j4
-	cd z3/build; sudo make install PREFIX=/usr
+	cd z3/build; sudo make install PREFIX=/usr/local
 	cd z3; rm -fr build/api/ml; mkdir build/api/ml
 	cd z3; cp src/api/ml/Makefile.build build/api/ml/Makefile
 	cd z3/build/api/ml; make z3.cma z3.cmxa
@@ -41,6 +44,7 @@ links:;\
 	ln -s checkquery.native Check; \
 	ln -s tolatex.native ToLaTeX; \
 	ln -s tester.native Test
+	ln -s compiler.native Compile
 
 simpletest:
 	./Test proofs/MP.proof
@@ -52,6 +56,12 @@ simpletest:
 	./Test proofs/MP_boparallel.unproof -error 5 bo-parallel -error 8 "EXT stability"
 	./Test proofs/MP_boparallelB.unproof -error 5 bo-parallel
 	./Test proofs/MP_boparallelC.unproof -error 10 "EXT stability"
+# victim of the sat test removal
+#	./Test proofs/MP_boparallelD.unproof -error 7 "bo-parallel (in-flight) stability of f=0 | m := 1 against interference m=1 | f := 1"
+	./Test proofs/MP_boparallelE.unproof -error 14 "EXT stability of r1=f=1/\(r2=0=>m=0) against m=0 | m := 1" \
+									 	 -error 16 "EXT stability of r1=f=1/\(r2=0=>m=0) against m=0 | m := 1"
+# victim of the sat test removal
+#	./Test proofs/MPdoubleparallel.proof
 	./Test proofs/almostWRC.proof
 	./Test proofs/almostISA2.proof
 	./Test proofs/WRC.proof
@@ -64,7 +74,7 @@ simpletest:
 	./Test proofs/MP_dountil_locd.proof
 	./Test proofs/MP_while.proof
 	./Test proofs/LB.proof
-	./Test -SCloc false proofs/LB.proof -error 9 "EXT stability" -error 16 "EXT stability"
+	./Test -sat false proofs/LB.proof -error 7 "EXT stability" -error 14 "EXT stability"
 	./Test -SCreg true proofs/SCreg.proof
 	./Test -SCreg false proofs/SCreg.proof -error 6 lo-parallel
 	./Test -SCreg true proofs/nothinair.proof
@@ -75,7 +85,7 @@ simpletest:
 	                                            -error 22 "inheritance of embroidery false"
 	./Test proofs/SB2.proof
 	./Test proofs/IRIW.proof
-	./Test proofs/UEXT.unproof -error 7 "UO-EXT stability"
+	./Test proofs/UEXT.unproof -error 7 "UEXT stability"
 	./Test proofs/uo-unstable-interference.unproof -error 4 "self-uo stability"
 	./Test -SCloc false proofs/LBwithoutSCloc.proof
 	./Test -SCloc false -sat false proofs/LBwithoutSCloc.proof
