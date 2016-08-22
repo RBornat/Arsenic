@@ -10,16 +10,18 @@ open Assign
    https://opensource.org/licenses/MIT
  *)
 
-type ipre = 
+type ipre = formula (*
   | IpreSimple of formula
   | IpreRes    of formula
   | IpreDouble of formula * formula (* normal, reserved *)
-  
-let string_of_ipre = function
+ *)  
+ 
+let string_of_ipre = string_of_formula (* function
   | IpreSimple f       -> "[*" ^ string_of_formula f ^ "*]"
   | IpreRes    f       -> "[* *:" ^ string_of_formula f ^ "*]"
   | IpreDouble (f1,f2) -> "[*" ^ string_of_formula f1 ^ "; *:" ^ string_of_formula f2 ^ "*]"
-
+ *)
+ 
 type simplecom = {sc_pos: sourcepos; sc_ipreopt: ipre option; sc_node: scomnode}
 
 and scomnode =
@@ -147,16 +149,17 @@ let is_aux_assign {tripletof=simplecom} =
   | Assign a -> Assign.is_aux_assign a
   | _        -> false
   
-let is_loadreserved {tripletof=simplecom} =
-  match simplecom.sc_node with
-  | Assign a -> Assign.is_loadreserved a
-  | _        -> false
+(* let is_loadreserved {tripletof=simplecom} =
+     match simplecom.sc_node with
+     | Assign a -> Assign.is_loadreserved a
+     | _        -> false
   
-let is_storeconditional {tripletof=simplecom} =
-  match simplecom.sc_node with
-  | Assign a -> Assign.is_storeconditional a
-  | _        -> false
-
+   let is_storeconditional {tripletof=simplecom} =
+     match simplecom.sc_node with
+     | Assign a -> Assign.is_storeconditional a
+     | _        -> false
+ *)
+ 
 let assign ct =
   match ct.tripletof.sc_node with
   | Assign a -> a
@@ -166,15 +169,16 @@ let assign ct =
                                         )
                       )
   
-let reserved ct =
-  match ct.tripletof.sc_node with
-  | Assign a -> Assign.reserved a
-  | _        -> raise (Invalid_argument (Printf.sprintf "%s Com.reserved %s" 
-                                             (string_of_sourcepos ct.tripletpos)
-                                             (string_of_triplet string_of_simplecom ct)
-                                        )
-                      )
-
+(* let reserved ct =
+     match ct.tripletof.sc_node with
+     | Assign a -> Assign.reserved a
+     | _        -> raise (Invalid_argument (Printf.sprintf "%s Com.reserved %s" 
+                                                (string_of_sourcepos ct.tripletpos)
+                                                (string_of_triplet string_of_simplecom ct)
+                                           )
+                         )
+ *)
+ 
 let rec fstlab_seq = function
   | com::_ -> fstlab_com com
   | []     -> raise Not_found
