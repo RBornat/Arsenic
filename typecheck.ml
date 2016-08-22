@@ -123,7 +123,7 @@ let rec typeassign_formula cxt bcxt t f =
      | Freg              r -> assigntype cxt t (string_of_reg r), bcxt
      | Fvar      (_, _, v) -> (* for translation to Z3, all variable instances are typed in bcxt (see modality.ml) *)
                               assigntype cxt t (string_of_var v), (f,t)::bcxt
-     | Latest (_, _, v)    -> assigntype cxt t (string_of_var v), (f,t)::bcxt
+     (* | Latest (_, _, v)    -> assigntype cxt t (string_of_var v), (f,t)::bcxt *)
      | Flogc             n -> assigntype cxt t (string_of_logc n), bcxt
      | Negarith          f -> unary  cxt bcxt Int  Int  f 
      | Not               f -> unary  cxt bcxt Bool Bool f
@@ -154,8 +154,8 @@ let rec typeassign_formula cxt bcxt t f =
                  Bool Bool f' in
          List.remove_assoc s cxt,       (* remove the outermost one *)
          bcxt 
-     | Sofar          (_,_,f) -> unary cxt bcxt Bool Bool f
-     | Since      (_,_,f1,f2) -> binary cxt bcxt Bool Bool Bool f1 f2
+     | Sofar            (_,f) -> unary cxt bcxt Bool Bool f
+     | Since        (_,f1,f2) -> binary cxt bcxt Bool Bool Bool f1 f2
      | Ite         (cf,tf,ef) -> ternary cxt bcxt t Bool t t cf tf ef
      | Cohere (v,f1,f2)       -> let cxt = unifytype cxt t Bool in
                                  let cxt, tv = typeassign_var cxt v in
@@ -169,7 +169,7 @@ let rec typeassign_formula cxt bcxt t f =
          List.fold_left utaf 
                         (assigntype cxt (FuncType(ts,t)) (string_of_name n), bcxt) 
                         (List.combine ts fs)
-     | Bfr    (_, _, bf)    -> unary cxt bcxt Bool Bool bf
+     | Bfr      ( _, bf)    -> unary cxt bcxt Bool Bool bf
      | Univ        (_,f)    -> unary cxt bcxt Bool Bool f
      | Fandw       (_,f)    -> unary cxt bcxt Bool Bool f
      | Threaded(_,f)        -> typeassign_formula cxt bcxt t f
@@ -243,11 +243,11 @@ let typeassign_assign cxt bcxt a =
   in
   match a with 
   | RbecomesE (r,e)         -> doit cxt bcxt (VarLoc r) [e] (* cheat *)
-  | LocbecomesEs (b,loces)  -> 
+  | LocbecomesEs ((* b, *) loces)  -> 
       List.fold_left (fun (cxt,bcxt) (loc,e) -> doit cxt bcxt loc [e])
                      (cxt,bcxt) 
                      loces
-  | RsbecomeLocs (b,rslocs) -> 
+  | RsbecomeLocs ((* b, *) rslocs) -> 
       List.fold_left (fun (cxt,bcxt) (rs,loc) -> doit cxt bcxt loc (List.map _recFreg rs))
                      (cxt,bcxt) 
                      rslocs
