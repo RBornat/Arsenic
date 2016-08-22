@@ -94,27 +94,17 @@ let check_query prefix query =
           let scq = Stability.sc_stable_query_intfdesc p i in
           Printf.printf "\nsc stability\n%s\n" (show_query assertions scq);
           tautZ3 scq assertions;
-          let satq, extq = Stability.ext_stable_queries_intfdesc Strongestpost.ExtHat p i in
-          Printf.printf "\next stability\n_sat(%s) =>\n%s\n" (string_of_formula satq) (show_query assertions extq);
-          (match satZ3 satq assertions with 
-           | Invalid _ -> Printf.printf "\nUnsat, therefore Valid\n"
-           | r         -> Printf.printf "\n%s\n" (show_sat r); 
-                          tautZ3 extq assertions
-          );
-          let satq, uoq = Stability.uo_stable_queries_intfdesc p i in
-          Printf.printf "\nuo stability\n_sat(%s) =>\n%s\n" (string_of_formula satq) (show_query assertions uoq);
-          (match satZ3 satq assertions with 
-           | Invalid _ -> Printf.printf "\nUnsat, therefore Valid\n"
-           | r         -> Printf.printf "\n%s\n" (show_sat r); 
-                          tautZ3 uoq assertions
-          )
+          let extq = Stability.ext_stable_query_intfdesc p i in
+          Printf.printf "\next stability\n%s\n" (show_query assertions extq);
+          tautZ3 extq assertions;
+          let uextq = Stability.uext_stable_query_intfdesc p i in
+          Printf.printf "\nuext stability\n%s\n" (show_query assertions uextq);
+          tautZ3 uextq assertions
       | Qstableintf (i1,i2)  -> 
-          let i1i = Intfdesc.instance NameSet.empty i1 in
-          let boq = Stability.bo_stable_query_intfdesc i1i.i_pre i2 in
+          let boq = Stability.bo_stable_query_intfdescs i1 i2 in
           Printf.printf "\nbo stability 1 against 2\n%s\n" (show_query assertions boq);
           tautZ3 boq assertions;
-          let i2i = Intfdesc.instance NameSet.empty i2 in
-          let boq = Stability.bo_stable_query_intfdesc i2i.i_pre i1 in
+          let boq = Stability.bo_stable_query_intfdescs i2 i1 in
           Printf.printf "\nbo stability 2 against 1\n%s\n" (show_query assertions boq);
           tautZ3 boq assertions
       | Qspimplies  (p,assign,q) -> 
