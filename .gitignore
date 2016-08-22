@@ -4,5 +4,6 @@ Arsenic
 Check
 ToLaTeX
 Test
+Compile
 *.native
 _build/
