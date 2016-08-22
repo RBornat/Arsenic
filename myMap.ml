@@ -14,7 +14,7 @@ end
 module type S = sig
   include Map.S
   val to_assoc  : 'a t -> (key * 'a) list
-  val of_assoc  : (key * 'a) list ->'a  t
+  val of_assoc  : (key * 'a) list -> 'a  t
   val to_string : ('a -> string) -> 'a t -> string
   val map       : ((key * 'a) -> 'b) -> ('b list -> 'c) -> 'a t -> 'c
   val mymerge   : ('a -> 'a -> 'a) -> 'a t -> 'a t -> 'a t
