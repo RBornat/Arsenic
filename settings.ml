@@ -102,8 +102,6 @@ let z3counters = ref false
 let param_SCreg = ref true
 let param_SCloc = ref true
 let param_LocalSpec = ref true
-let param_usesat = ref false
-let param_simplebocheck = ref true
 
 (* *********************** miscellaneous ************************ *)
 
