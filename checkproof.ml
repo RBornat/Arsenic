@@ -76,75 +76,81 @@ module PKSCMap = MyMap.Make (struct type t = pkind * simplecom triplet
 
 (* precondition of each simplecom triplet. Different for load_reserved, store-conditional *)
 
-let we_are_latest v = _recEqual (_recLatest Here Now v) (_recFname v)
+(* let we_are_latest v = _recEqual (_recLatest Here NoHook v) (_recFname v) *)
 
 let cpre go_sat pk ct =
   let defaultpre = precondition_of_knot go_sat pk ct.tripletknot in
-  if Com.is_loadreserved ct then
-    (match defaultpre with
-     | PreSingle fpre            -> defaultpre
-     | PreDouble (fpre, locs, _) -> report (Error (ct.tripletpos,
-                                                   Printf.sprintf "precondition of load_reserved has %s"
-                                                                  (prefixed_phrase_of_list string_of_location 
-                                                                                           "reservation for" "reservations for"
-                                                                                           locs
-                                                                  )
-                                                  )
-                                           );
-                                    PreSingle fpre
-    )
-  else
-  if Com.is_storeconditional ct then 
-    (let a = Com.assign ct in
-     let resloc = Assign.reserved a in
-     let resv = Location.locv resloc in
-     match defaultpre with
-     | PreSingle fpre               -> 
-         report (Error (ct.tripletpos,
-                        Printf.sprintf "precondition of store-conditional has no reservation for %s"
-                                       (string_of_location resloc)
-                       )
-                );
-         PreDouble (fpre,[resloc], conjoin [fpre; we_are_latest resv])
-     | PreDouble (fpre,locs,fpreres) -> 
-         if not (List.exists (Location.eq resloc) locs) then
-           report (Error (ct.tripletpos,
-                          Printf.sprintf "precondition of store-conditional has no reservation for %s"
-                                         (string_of_location resloc)
-                         )
-                  );
-          if List.length locs>1 then  
+     (* if Com.is_loadreserved ct then
+       (match defaultpre with
+        | PreSingle fpre            -> defaultpre
+        | PreDouble (fpre, locs, _) -> report (Error (ct.tripletpos,
+                                                      Printf.sprintf "precondition of load_reserved has %s"
+                                                                     (prefixed_phrase_of_list string_of_location 
+                                                                                              "reservation for" "reservations for"
+                                                                                              locs
+                                                                     )
+                                                     )
+                                              );
+                                       PreSingle fpre
+       )
+     else
+     if Com.is_storeconditional ct then 
+       (let a = Com.assign ct in
+        let resloc = Assign.reserved a in
+        let resv = Location.locv resloc in
+        match defaultpre with
+        | PreSingle fpre               -> 
             report (Error (ct.tripletpos,
-                           Printf.sprintf "precondition of store-conditional has %s"
-                                          (prefixed_phrase_of_list 
-                                             string_of_location 
-                                             "reservation for" "reservations for"
-                                             (List.filter (not <.> Location.eq resloc) locs)
-                                          )
+                           Printf.sprintf "precondition of store-conditional has no reservation for %s"
+                                          (string_of_location resloc)
                           )
                    );
-         PreDouble (fpre,[resloc],conjoin [fpreres; we_are_latest resv])
-    )
-  else defaultpre
+            PreDouble (fpre,[resloc], conjoin [fpre; we_are_latest resv])
+        | PreDouble (fpre,locs,fpreres) -> 
+            if not (List.exists (Location.eq resloc) locs) then
+              report (Error (ct.tripletpos,
+                             Printf.sprintf "precondition of store-conditional has no reservation for %s"
+                                            (string_of_location resloc)
+                            )
+                     );
+             if List.length locs>1 then  
+               report (Error (ct.tripletpos,
+                              Printf.sprintf "precondition of store-conditional has %s"
+                                             (prefixed_phrase_of_list 
+                                                string_of_location 
+                                                "reservation for" "reservations for"
+                                                (List.filter (not <.> Location.eq resloc) locs)
+                                             )
+                             )
+                      );
+            PreDouble (fpre,[resloc],conjoin [fpreres; we_are_latest resv])
+       )
+     else defaultpre
+   *)
+  defaultpre
   
 (* interference of each simplecom triplet, Elaboration and Interference (maybe I'll change those names back ...) *)
 (* Even register assignments interfere, but (see condition in parser) they don't have interference pres *)
 
-type intf = 
+type intf = intfdesc (*
   | IntfSingle of intfdesc 
   | IntfDouble of intfdesc * intfdesc (* normal, reserved *)
-
-let string_of_intf = function
+ *)
+ 
+let string_of_intf = string_of_intfdesc (* function
   | IntfSingle i        -> "IntfSingle(" ^ string_of_intfdesc i ^ ")" 
   | IntfDouble (i,ires) -> "IntfDouble((" ^ string_of_intfdesc i 
                                           ^ "),("
                                           ^ string_of_intfdesc ires
                                           ^"))"
 
-let intf_fold f v = function
+ *)
+ 
+let intf_fold f v = f v (* function
   | IntfSingle i        -> f v i 
   | IntfDouble (i,ires) -> f (f v ires) i
-  
+*)
+
 let intf_iter f = intf_fold (fun () -> f) ()
 
 let mkintf cpre pk ct =
@@ -152,94 +158,100 @@ let mkintf cpre pk ct =
   let preopt = ct.tripletof.sc_ipreopt in
   let defaultpre = cpre Interference ct in 
   let intfdesc fpre = Intfdesc.mk_intfdesc ct.tripletpos fpre assign in
-  if Assign.is_loadreserved assign then
-    (let fpre, fpreres = 
-       match defaultpre with
-       | PreSingle fpre -> fpre, conjoin [fpre; we_are_latest (Location.locv (Assign.reserved assign))]
-       | _              ->
-           raise (Crash (Printf.sprintf "%s %s has double pre %s" 
-                                        (string_of_sourcepos ct.tripletpos)
-                                        (string_of_triplet string_of_simplecom ct)
-                                        (string_of_pre defaultpre)
-                        )
-                 )
-     in
-     IntfDouble (intfdesc fpre, intfdesc fpreres)
-    )
-  else
-  if Assign.is_storeconditional assign then
-    (let fpreres = 
-       match defaultpre with
-       | PreDouble (_,_,fpreres) -> fpreres
-       | _                       ->
-           raise (Crash (Printf.sprintf "%s %s has single pre %s" 
-                                        (string_of_sourcepos ct.tripletpos)
-                                        (string_of_triplet string_of_simplecom ct)
-                                        (string_of_pre defaultpre)
-                        )
-                 )
-     in
-     match preopt with
-     | None                   -> IntfSingle (intfdesc fpreres)
-     | Some (IpreRes fpreres) -> IntfSingle (intfdesc fpreres)
-     | Some (IpreSimple fpre) -> 
-         report (Error (ct.tripletpos,
-                        "store-conditional does not need an unreserved-interference precondition"
-                       )
-                );
-         IntfSingle (intfdesc fpreres)
-     | Some (IpreDouble(_,fpreres)) -> 
-         report (Error (ct.tripletpos,
-                        "store-conditional does not need an unreserved-interference precondition"
-                       )
-                );
-         IntfSingle (intfdesc fpreres)
-    )
-  else (* just an ordinary assignment *)
-    ((* check it doesn't assign to its own reservation *)
-     (match Assign.is_var_assign assign, defaultpre with
-      | true , PreDouble(_,locs,_) ->
-          let alocs = fstof2 (List.split (Assign.loces assign)) in
-          let badlocs = List.filter (fun aloc -> List.mem aloc locs) alocs in
-          if badlocs<>[] then
+  (* if Assign.is_loadreserved assign then
+       (let fpre, fpreres = 
+          match defaultpre with
+          | PreSingle fpre -> fpre, conjoin [fpre; we_are_latest (Location.locv (Assign.reserved assign))]
+          | _              ->
+              raise (Crash (Printf.sprintf "%s %s has double pre %s" 
+                                           (string_of_sourcepos ct.tripletpos)
+                                           (string_of_triplet string_of_simplecom ct)
+                                           (string_of_pre defaultpre)
+                           )
+                    )
+        in
+        IntfDouble (intfdesc fpre, intfdesc fpreres)
+       )
+     else
+     if Assign.is_storeconditional assign then
+       (let fpreres = 
+          match defaultpre with
+          | PreDouble (_,_,fpreres) -> fpreres
+          | _                       ->
+              raise (Crash (Printf.sprintf "%s %s has single pre %s" 
+                                           (string_of_sourcepos ct.tripletpos)
+                                           (string_of_triplet string_of_simplecom ct)
+                                           (string_of_pre defaultpre)
+                           )
+                    )
+        in
+        match preopt with
+        | None                   -> IntfSingle (intfdesc fpreres)
+        | Some (IpreRes fpreres) -> IntfSingle (intfdesc fpreres)
+        | Some (IpreSimple fpre) -> 
             report (Error (ct.tripletpos,
-                           Printf.sprintf "precondition has %s; but it assigns to %s" 
-                                          (prefixed_phrase_of_list 
-                                                    string_of_location
-                                                    "reservation" "reservations"
-                                                    alocs
-                                          )
-                                          (standard_phrase_of_list string_of_location badlocs)
+                           "store-conditional does not need an unreserved-interference precondition"
                           )
-                   )
-      | _                          -> ()
-     );
-     match preopt with
-     | None -> 
-         (match defaultpre with
-          | PreSingle pre            -> IntfSingle (intfdesc pre)
-          | PreDouble (pre,_,preres) -> IntfDouble (intfdesc pre, intfdesc preres)
-         )
-     | Some (IpreSimple pre) ->
-         (match defaultpre with
-          | PreSingle _            -> IntfSingle (intfdesc pre)
-          | PreDouble (_,_,preres) -> IntfDouble (intfdesc pre, intfdesc preres)
-         )
-     | Some (IpreRes preres) ->
-         (match defaultpre with
-          | PreSingle pre       -> IntfDouble (intfdesc pre, intfdesc preres)
-          | PreDouble (pre,_,_) -> IntfDouble (intfdesc pre, intfdesc preres)
-         )
-     | Some (IpreDouble (pre,preres)) -> IntfDouble (intfdesc pre, intfdesc preres)
-    )
-
+                   );
+            IntfSingle (intfdesc fpreres)
+        | Some (IpreDouble(_,fpreres)) -> 
+            report (Error (ct.tripletpos,
+                           "store-conditional does not need an unreserved-interference precondition"
+                          )
+                   );
+            IntfSingle (intfdesc fpreres)
+       )
+     else (* just an ordinary assignment *)
+       ((* check it doesn't assign to its own reservation *)
+        (match Assign.is_var_assign assign, defaultpre with
+         | true , PreDouble(_,locs,_) ->
+             let alocs = fstof2 (List.split (Assign.loces assign)) in
+             let badlocs = List.filter (fun aloc -> List.mem aloc locs) alocs in
+             if badlocs<>[] then
+               report (Error (ct.tripletpos,
+                              Printf.sprintf "precondition has %s; but it assigns to %s" 
+                                             (prefixed_phrase_of_list 
+                                                       string_of_location
+                                                       "reservation" "reservations"
+                                                       alocs
+                                             )
+                                             (standard_phrase_of_list string_of_location badlocs)
+                             )
+                      )
+         | _                          -> ()
+        );
+        match preopt with
+        | None -> 
+            (match defaultpre with
+             | PreSingle pre            -> IntfSingle (intfdesc pre)
+             | PreDouble (pre,_,preres) -> IntfDouble (intfdesc pre, intfdesc preres)
+            )
+        | Some (IpreSimple pre) ->
+            (match defaultpre with
+             | PreSingle _            -> IntfSingle (intfdesc pre)
+             | PreDouble (_,_,preres) -> IntfDouble (intfdesc pre, intfdesc preres)
+            )
+        | Some (IpreRes preres) ->
+            (match defaultpre with
+             | PreSingle pre       -> IntfDouble (intfdesc pre, intfdesc preres)
+             | PreDouble (pre,_,_) -> IntfDouble (intfdesc pre, intfdesc preres)
+            )
+        | Some (IpreDouble (pre,preres)) -> IntfDouble (intfdesc pre, intfdesc preres)
+       )
+   *) 
+  intfdesc (match preopt with
+            | None     -> defaultpre
+            | Some pre -> pre
+           )
+  
 (* postconditions of each simplecom triplet *)
 
-type post = 
+type post = formula (*
   | PostSingle of formula 
   | PostDouble of formula * location * formula (* unreserved, reservation, reserved *)
-
-let string_of_post = function
+ *)
+ 
+let string_of_post = string_of_formula (* function
   | PostSingle f            -> "IntfSingle(" ^ string_of_formula f ^ ")" 
   | PostDouble (f,loc,fres) -> "PostDouble((" ^ string_of_formula f 
                                           ^ "),"
@@ -247,58 +259,62 @@ let string_of_post = function
                                           ^ ",("
                                           ^ string_of_formula fres
                                           ^"))"
-
+ *)
+ 
 (* floc has to deliver a single location ... *)
-let post_of_pre fpre floc pre =
+let post_of_pre fpre (* floc *) pre = fpre pre (*
   match pre with 
-  | PreSingle pre                -> PostSingle (fpre pre)
+  | PreSingle pre                 -> PostSingle (fpre pre)
   | PreDouble (pre, locs, preres) -> PostDouble (fpre pre, floc locs, fpre preres)
-
-let justoneloc pos = function
-  | []             -> raise (Crash (Printf.sprintf "%s justoneloc no locs" (string_of_sourcepos pos)))
-  | [loc]          -> loc
-  | loc::_ as locs ->
-      report (Error (pos,
-                     Printf.sprintf "precondition has more than one location reservation: %s"
-                                    (standard_phrase_of_list string_of_location locs)
-                    )
-             );
-      loc
-
+ *)
+ 
+(* let justoneloc pos = function
+     | []             -> raise (Crash (Printf.sprintf "%s justoneloc no locs" (string_of_sourcepos pos)))
+     | [loc]          -> loc
+     | loc::_ as locs ->
+         report (Error (pos,
+                        Printf.sprintf "precondition has more than one location reservation: %s"
+                                       (standard_phrase_of_list string_of_location locs)
+                       )
+                );
+         loc
+ *)
+ 
 let cpost cpre pk ct =
   let pre = cpre pk ct in
   match ct.tripletof.sc_node with
-  | Skip     -> post_of_pre id (justoneloc ct.tripletpos) pre
-  | Assert f -> post_of_pre (fun pre -> conjoin [pre; f]) (justoneloc ct.tripletpos) pre
+  | Skip     -> post_of_pre id (* (justoneloc ct.tripletpos) *) pre
+  | Assert f -> post_of_pre (fun pre -> conjoin [pre; f]) (* (justoneloc ct.tripletpos) *) pre
   | Assign a -> 
       let apost pre = 
-        post_of_pre (fun pre -> Strongestpost.strongest_post true pre a) (justoneloc ct.tripletpos) pre
+        post_of_pre (fun pre -> Strongestpost.strongest_post true pre a) (* (justoneloc ct.tripletpos) *) pre
       in
-      if Assign.is_loadreserved a then
-        (match pre with
-         | PreSingle fpre -> 
-             let resloc = Assign.reserved a in
-             let pre = PreDouble (fpre, [resloc], conjoin [fpre; we_are_latest (Location.locv resloc)]) in
-             apost pre
-         | _              -> 
-             raise (Crash (Printf.sprintf "%s %s has double pre %s" 
-                                          (string_of_sourcepos ct.tripletpos)
-                                          (string_of_triplet string_of_simplecom ct)
-                                          (string_of_pre pre)
-                          )
-                   )
-        )
-      else
-      if Assign.is_storeconditional a then
-        (* add 'latest' to pre and postcondition *)
-        let resloc = Assign.reserved a in
-        let resv = Location.locv resloc in
-        let latest_after = _recEqual (_recLatest Here Now resv) (Assign.conditionally_stored a) in
-        post_of_pre (fun fpre -> conjoin [Strongestpost.strongest_post true (conjoin [fpre; we_are_latest resv]) a; latest_after])
-                    (justoneloc ct.tripletpos) 
-                    pre
-      else
-        apost pre
+      (* if Assign.is_loadreserved a then
+           (match pre with
+            | PreSingle fpre -> 
+                let resloc = Assign.reserved a in
+                let pre = PreDouble (fpre, [resloc], conjoin [fpre; we_are_latest (Location.locv resloc)]) in
+                apost pre
+            | _              -> 
+                raise (Crash (Printf.sprintf "%s %s has double pre %s" 
+                                             (string_of_sourcepos ct.tripletpos)
+                                             (string_of_triplet string_of_simplecom ct)
+                                             (string_of_pre pre)
+                             )
+                      )
+           )
+         else
+         if Assign.is_storeconditional a then
+           (* add 'latest' to pre and postcondition *)
+           let resloc = Assign.reserved a in
+           let resv = Location.locv resloc in
+           let latest_after = _recEqual (_recLatest Here NoHook resv) (Assign.conditionally_stored a) in
+           post_of_pre (fun fpre -> conjoin [Strongestpost.strongest_post true (conjoin [fpre; we_are_latest resv]) a; latest_after])
+                       (justoneloc ct.tripletpos) 
+                       pre
+         else
+       *)
+    apost pre
 
 type z3query = z3question * bool * (unit -> string) * formula * formula list
 type z3key = z3question * formula * formula list
@@ -398,23 +414,24 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
                 | CExpr   ft -> let pre = precondition_of_knot go_sat pk ft.tripletknot in
                                 post_of_pre 
                                   (fun pre -> conjoin [pre; (if b then ft.tripletof else _recNot (ft.tripletof))])
-                                  (justoneloc ft.tripletpos)
+                                  (* (justoneloc ft.tripletpos) *) 
                                   pre
                 | CAssign ct -> (match b, cpre_of_ct pk ct with
-                                 | false, PreDouble (pre, _, _) -> PostSingle pre
-                                 | false, PreSingle (pre)       -> 
+                                 (* | false, PreDouble (pre, _, _) -> PostSingle pre *)
+                                 | false, (* PreSingle *) (pre)       -> 
                                      report (Error (ct.tripletpos, "store-conditional has no reserved constraint"));
-                                     PostSingle pre
-                                 | true , PreDouble _ ->
-                                     (match cpost_of_ct pk ct with
-                                      | PostDouble (_,_,postres) -> PostSingle postres (* I think *)
-                                      | _                        -> 
-                                         raise (Crash (string_of_sourcepos ct.tripletpos 
-                                                       ^ " sourcepost_of_stitch only one post"
-                                                      )
-                                               )
-                                     )
-                                 | true , PreSingle (pre)       -> 
+                                     (* PostSingle *) pre
+                                 (* | true , PreDouble _ ->
+                                        (match cpost_of_ct pk ct with
+                                         | PostDouble (_,_,postres) -> PostSingle postres (* I think *)
+                                         | _                        -> 
+                                            raise (Crash (string_of_sourcepos ct.tripletpos 
+                                                          ^ " sourcepost_of_stitch only one post"
+                                                         )
+                                                  )
+                                        )
+                                  *)
+                                 | true , (* PreSingle *) (pre)       -> 
                                      report (Error (ct.tripletpos, "store-conditional has no reserved constraint"));
                                      cpost_of_ct pk ct
                                 )
@@ -429,7 +446,7 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
                             )
                      )
           )
-      | CidInit (_,f)    -> PostSingle (sofar Here Now (universal Now f))
+      | CidInit (_,f)    -> (* PostSingle *) (sofar NoHook (universal NoHook f))
       | CidThreadPost _  
       | CidFinal      _  -> 
           raise (Crash (Printf.sprintf "%s: stitch %s refers to thread/program postcondition"
@@ -438,19 +455,21 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
                        )
                 )
      in
-     let spopt = spopt_of_stitch stitch in
-     (* this thing is only called once: we can check the arity here *)
-     (match post, spopt with
-      | PostSingle _, Some (SpostDouble _) 
-      | PostSingle _, Some (SpostRes    _) ->
-          report (Error (stitch.stitchpos,
-                         Printf.sprintf "constraint source %s cannot generate a reservation postcondition"
-                                        (label_of_node stitch.stitchsource)
-                        )
-                 )
-      | _                           -> ()
-     );
-     post, spopt
+     (* let spopt = spopt_of_stitch stitch in
+        (* this thing is only called once: we can check the arity here *)
+        (match post, spopt with
+         | PostSingle _, Some (SpostDouble _) 
+         | PostSingle _, Some (SpostRes    _) ->
+             report (Error (stitch.stitchpos,
+                            Printf.sprintf "constraint source %s cannot generate a reservation postcondition"
+                                           (label_of_node stitch.stitchsource)
+                           )
+                    )
+         | _                           -> ()
+        );
+        post, spopt
+      *)
+     post
   in
   
   let find_actual_ancestors memofun =
@@ -491,94 +510,33 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
     if i<0 then "rely" else ("thread " ^ string_of_int i)
   in
   
-  let check_external_stability spos locopt assertion (_,intfdesc as intf) =
-    let resopt = locopt in
+  let check_external_stability spos (* locopt *) assertion (_,intfdesc as intf) =
+    (* let resopt = locopt in *)
     let stringfun stabkind () = 
-      Printf.sprintf "%s of %s against %s (from %s)%s" 
+      Printf.sprintf "%s of %s against %s (from %s)" 
                      stabkind
                      (string_of_formula assertion) 
                      (string_of_intfdesc intfdesc)
                      (intf_from intf)
-                     (match resopt with
-                      | Some loc -> Printf.sprintf " (disregarding interference with %s)"
-                                                   (string_of_location loc)
-                      | None     -> ""
-                     )
+                     (* (match resopt with
+                         | Some loc -> Printf.sprintf " (disregarding interference with %s)"
+                                                      (string_of_location loc)
+                         | None     -> ""
+                        )
+                      *)
     in
     let assigned = Intfdesc.assigned intfdesc in
     let frees = Formula.frees assertion in
     if NameSet.is_empty (NameSet.inter assigned frees) then
       avoided spos "" (stringfun "external stability check")
     else
-      (let satq, extq = Stability.ext_stable_queries_intfdesc Strongestpost.ExtHat assertion intfdesc in 
-       let extq =
-         match resopt with
-         | Some loc -> let v = List.hd (Intfdesc.assigned_vars intfdesc) in
-                       (* v=hook(v)=>extq *)
-                       _recImplies (_recEqual (_recFvar Here Now v)
-                                              (_recFvar Here Then v)
-                                   )
-                                   extq
-         | None     -> extq
-       in
-       (* pragmatically, satisfaction involving coherence seems to be difficult for Z3. 
-          So we do it the other way round in that case.
-        *)
-       let ask_uo () =
-         if not (Formula.exists (is_recU <||> is_recLatest) assertion) then
-           (avoided spos "Z3 check" (stringfun "UO-EXT stability");
-            Valid ([],_recTrue)
-           )
-         else
-           (let _, uoq = Stability.uo_stable_queries_intfdesc assertion intfdesc in
-            ask_taut spos (stringfun "UEXT stability") uoq;
-           )
-       in
-       let check_uo () =
-         let r = ask_uo () in
-         report_z3result r spos (stringfun "UEXT stability")
-       in
-       if Formula.exists is_recCohere satq then
-         (match ask_taut spos (stringfun "EXT stability") extq with
-          | Valid _     -> 
-              (match ask_uo () with
-               | Valid _   -> ()
-               | uo_result ->
-                   (match ask_sat spos (stringfun "SCLOC-EXT sat") satq with
-                    | Invalid _  -> () (* we didn't need to ask *)
-                    | sat_result -> report_z3result sat_result spos (stringfun "SCLOC-EXT sat");
-                                    report_z3result uo_result spos (stringfun "UO-EXT stability")
-                   )
-              )
-          | taut_result ->
-              (match ask_sat spos (stringfun "SCLOC-EXT sat") satq with
-               | Invalid _  -> () (* we didn't need to ask *)
-               | Valid _    -> report_z3result taut_result spos (stringfun "EXT stability");
-                               check_uo ();
-               | sat_result -> report_z3result sat_result spos (stringfun "SCLOC-EXT sat");
-                               report_z3result taut_result spos (stringfun "EXT stability");
-                               check_uo ()
-              )
-         )
-       else (* the straight way *)
-         ((* try not to report undecided satq *)
-          match ask_sat spos (stringfun "SCLOC-EXT sat") satq with
-          | Invalid _  -> ()
-          | sat_result -> 
-             let taut_result = ask_taut spos (stringfun "EXT stability") extq in
-             match sat_result, taut_result with
-             | _      , Valid _   -> 
-                 (match ask_uo () with
-                  | Valid _   -> ()
-                  | uo_result -> report_z3result sat_result spos (stringfun "SCLOC-EXT sat");
-                                 report_z3result uo_result spos (stringfun "UO-EXT stability")
-                 )
-             | Valid _, _         -> report_z3result taut_result spos (stringfun "EXT stability");
-                                     check_uo ()
-             | _                  -> report_z3result sat_result spos (stringfun "SCLOC-EXT sat");
-                                     report_z3result taut_result spos (stringfun "EXT stability");
-                                     check_uo ()
-
+      (let extq = Stability.ext_stable_query_intfdesc assertion intfdesc in
+       check_taut spos (stringfun "EXT stability") extq;
+       if not (Formula.exists (is_recU (* <||> is_recLatest *)) assertion) then
+         avoided spos "Z3 check" (stringfun "UEXT stability")
+       else
+         (let uextq = Stability.uext_stable_query_intfdesc assertion intfdesc in
+          check_taut spos (stringfun "UEXT stability") uextq
          )
       )
   in
@@ -611,11 +569,12 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
       let f = translate intfdesc in
       bindExists (Intfdesc.binders intfdesc) f
     in
-    (* if it's a normal assign, don't look at storeconditionals in rgs *)
-    let normal intfdesc = not (Assign.is_storeconditional (Intfdesc.assign intfdesc)) in
-    let rgs =
-      if normal intfdesc then List.filter normal rgs else rgs
-    in
+    (* (* if it's a normal assign, don't look at storeconditionals in rgs *)
+       let normal intfdesc = not (Assign.is_storeconditional (Intfdesc.assign intfdesc)) in
+       let rgs =
+         if normal intfdesc then List.filter normal rgs else rgs
+       in
+     *)
     let query = _recImplies (translate intfdesc)
                             (disjoin (tranextravs freevs :: List.map tranrg rgs))
     in
@@ -681,7 +640,7 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
       
       (* inheritance of stitch -- we do Interference -> Interference. Hmm. *)
       (* inheritance on bo is tricky: we would like to do _B(sourcepost) => embroidery.
-         When sourcepost is subst_clean (no hatted or hooked subformulas), that's ok.
+         When sourcepost is subst_clean (no enhat or hooked subformulas), that's ok.
          If embroidery is _B(P), just do sourcepost=>P. If embroidery is a conjunction, 
          do it piecewise. If it's forall x (B(P)), treat as B(forall x P). But otherwise 
          we're riding for a fall.
@@ -716,7 +675,7 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
                (Remark (pos_of_stitch stitch, 
                        Printf.sprintf "Arsenic cannot verify inheritance of embroidery \
                                        %s because the strongest-post of the source \
-                                       %s contains hatted and/or hooked subformulas. \
+                                       %s contains enhat and/or hooked subformulas. \
                                        Give us a hint: \
                                        what does the strongest-post imply?"
                                       (string_of_formula embroidery)
@@ -727,64 +686,65 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
             )
       in
       let order = order_of_stitch stitch in
-      let sourcepost, spopt = 
+      let sourcepost (* , spopt *) = 
         match order with
         | So -> raise (Crash (Printf.sprintf "so in knot %s" (string_of_knot knot)))
         | _  -> sourcepost_of_stitch Elaboration stitch (* Elaboration always, even with go *)
       in
-      let sourcepost =
-        match spopt with
-        | None                    -> sourcepost
-        | Some (SpostSimple post) ->
-            (match sourcepost with
-             | PostSingle _               -> PostSingle post
-             | PostDouble (_,loc,postres) -> PostDouble (post, loc, postres)
-            )
-        | Some (SpostRes postres) ->
-            (match sourcepost with
-             | PostSingle post         -> 
-                 report (Error (stitch.stitchpos,
-                                Printf.sprintf "stitch source %s does not have a \
-                                                reserved postcondition, yet stitch \
-                                                has a reserved precondition"
-                                                blab
-                               )
-                        );
-                 PostDouble (post, VarLoc "??", postres)
-             | PostDouble (post,loc,_) -> PostDouble (post, loc, postres)
-            )
-        | Some (SpostDouble (post, postres)) -> 
-            (match sourcepost with
-             | PostSingle _          -> 
-                 report (Error (stitch.stitchpos,
-                                Printf.sprintf "stitch source %s does not have a \
-                                                reserved postcondition, yet stitch \
-                                                has a reserved precondition"
-                                                blab
-                               )
-                        );
-                 PostDouble (post, VarLoc "??", postres)
-             | PostDouble (_,loc,_) -> PostDouble (post, loc, postres)
-            )
-      in
-      let sourcepost =
-        match is_reserved_stitch stitch, sourcepost with
-        | _    , PostSingle post               -> post
-        | true , PostDouble (_   , _, postres) -> postres
-        | false, PostDouble (post, _, _      ) -> post   
-      in 
+      (* let sourcepost =
+           match spopt with
+           | None                    -> sourcepost
+           | Some (SpostSimple post) ->
+               (match sourcepost with
+                | PostSingle _               -> PostSingle post
+                | PostDouble (_,loc,postres) -> PostDouble (post, loc, postres)
+               )
+           | Some (SpostRes postres) ->
+               (match sourcepost with
+                | PostSingle post         -> 
+                    report (Error (stitch.stitchpos,
+                                   Printf.sprintf "stitch source %s does not have a \
+                                                   reserved postcondition, yet stitch \
+                                                   has a reserved precondition"
+                                                   blab
+                                  )
+                           );
+                    PostDouble (post, VarLoc "??", postres)
+                | PostDouble (post,loc,_) -> PostDouble (post, loc, postres)
+               )
+           | Some (SpostDouble (post, postres)) -> 
+               (match sourcepost with
+                | PostSingle _          -> 
+                    report (Error (stitch.stitchpos,
+                                   Printf.sprintf "stitch source %s does not have a \
+                                                   reserved postcondition, yet stitch \
+                                                   has a reserved precondition"
+                                                   blab
+                                  )
+                           );
+                    PostDouble (post, VarLoc "??", postres)
+                | PostDouble (_,loc,_) -> PostDouble (post, loc, postres)
+               )
+         in
+         let sourcepost = post 
+              match is_reserved_stitch stitch, sourcepost with
+              | _    , PostSingle post               -> post
+              | true , PostDouble (_   , _, postres) -> postres
+              | false, PostDouble (post, _, _      ) -> post   
+         in 
+       *)
       let query = 
         match order with
         | So -> raise (Crash (Printf.sprintf "so in knot %s" (string_of_knot knot)))
         | Lo 
         | Go -> _recImplies sourcepost bassert
         | Bo -> modalq sourcepost 
-                       (fun f -> match f.fnode with Bfr (Here,Now,f) -> Some f | _ -> None)
-                       (_recBfr Here Now) 
+                       (fun f -> match f.fnode with Bfr (NoHook,f) -> Some f | _ -> None)
+                       (_recBfr NoHook) 
                        bassert
         | Uo -> modalq sourcepost
-                       (fun f -> match f.fnode with Univ (Now,f) -> Some f | _ -> None)
-                       (_recUniv Now) 
+                       (fun f -> match f.fnode with Univ (NoHook,f) -> Some f | _ -> None)
+                       (_recUniv NoHook) 
                        bassert
       in
       let stringfun () =
@@ -797,35 +757,36 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
       in
       check_taut (pos_of_stitch stitch) stringfun query
       ;
-      (* inheritance of location *)
-      (match locopt_of_stitch stitch with
-       | Some loc -> 
-           (match sourcepost_of_stitch Elaboration stitch with
-            | PostSingle pre, _ ->
-                report (Error (stitch.stitchpos,
-                               Printf.sprintf "stitch has reservation %s, but source %s \
-                                               doesn't have a reserved postcondition"
-                                              (string_of_location loc)
-                                              blab
-                              )
-                       )
-            | PostDouble (_, ploc, _), _ 
-                when not (Location.eq ploc loc) ->
-                report (Error (stitch.stitchpos,
-                               Printf.sprintf "stitch has reservation %s, but source %s \
-                                               has postcondition reservation %s"
-                                              (string_of_location loc)
-                                              blab
-                                              (string_of_location ploc)
-                              )
-                       )
-            | _    -> () (* double, same loc *)
-           )
-       | None         -> () (* not a reserved stitch *)
-      )
-      ;
+      (* (* inheritance of location *)
+         (match locopt_of_stitch stitch with
+          | Some loc -> 
+              (match sourcepost_of_stitch Elaboration stitch with
+               | PostSingle pre, _ ->
+                   report (Error (stitch.stitchpos,
+                                  Printf.sprintf "stitch has reservation %s, but source %s \
+                                                  doesn't have a reserved postcondition"
+                                                 (string_of_location loc)
+                                                 blab
+                                 )
+                          )
+               | PostDouble (_, ploc, _), _ 
+                   when not (Location.eq ploc loc) ->
+                   report (Error (stitch.stitchpos,
+                                  Printf.sprintf "stitch has reservation %s, but source %s \
+                                                  has postcondition reservation %s"
+                                                 (string_of_location loc)
+                                                 blab
+                                                 (string_of_location ploc)
+                                 )
+                          )
+               | _    -> () (* double, same loc *)
+              )
+          | None         -> () (* not a reserved stitch *)
+         )
+         ;
+       *)
       (* external stability of stitch *)
-      List.iter (check_external_stability (pos_of_stitch stitch) (locopt_of_stitch stitch) bassert) rely;
+      List.iter (check_external_stability (pos_of_stitch stitch) (* (locopt_of_stitch stitch) *) bassert) rely;
       
       (* here goes with internal stability *)
       (* we have a constraint b->c. Find relevant so paths *)
@@ -1005,9 +966,11 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
                  check_taut (pos_of_stitch stitch) stringfun scq
                 )
         in
-        match aintf with
-        | IntfSingle i        -> check_lo i
-        | IntfDouble (i,ires) -> check_lo i; check_lo ires
+        (* match aintf with
+           | IntfSingle i        -> check_lo i
+           | IntfDouble (i,ires) -> check_lo i; check_lo ires
+         *)
+        check_lo aintf
       in
       List.iter cassign assigns;
         
@@ -1121,20 +1084,22 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
                  check_taut at.tripletknot.knotloc stringfun boq
                 )
              in
-             match aintf, bintf with
-             | IntfSingle ai        , IntfSingle bi         -> check_buo ai bi
-             | IntfSingle ai        , IntfDouble (bi,bires) -> check_buo ai bi; check_buo ai bires
-             | IntfDouble (ai,aires), IntfSingle bi         -> check_buo ai bi; check_buo aires bi
-             | IntfDouble (ai,aires), IntfDouble (bi,bires) -> check_buo ai bi; check_buo ai bires;
-                                                               check_buo aires bi; check_buo aires bires
+             (* match aintf, bintf with
+                | IntfSingle ai        , IntfSingle bi         -> check_buo ai bi
+                | IntfSingle ai        , IntfDouble (bi,bires) -> check_buo ai bi; check_buo ai bires
+                | IntfDouble (ai,aires), IntfSingle bi         -> check_buo ai bi; check_buo aires bi
+                | IntfDouble (ai,aires), IntfDouble (bi,bires) -> check_buo ai bi; check_buo ai bires;
+                                                                  check_buo aires bi; check_buo aires bires
+              *) 
+             check_buo aintf bintf
           )
         )
     in
     if List.mem triplet vassigns then
       List.iter check (List.map (fun vassign -> vassign, triplet) vassigns)
   in
-  let check_boparallel = cbup is_bo_opath Stability.bo_stable_query_irecs "bo" in
-  let check_uoparallel = cbup is_uo_opath Stability.uo_stable_internal_irecs "uo" in
+  let check_boparallel = cbup is_bo_opath Stability.bo_stable_query "bo" in
+  let check_uoparallel = cbup is_uo_opath Stability.uo_stable_query "uo" in
   
   (* *********************** body of checkproof_thread ***************************** *)
   
@@ -1149,11 +1114,11 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
   in
   match thread.t_body with
   | Threadfinal f ->  
-      List.iter (check_external_stability f.fpos None f) rely
+      List.iter (check_external_stability f.fpos (* None *) f) rely
   | Threadseq []  -> ()
   | Threadseq seq -> 
       (* If we have a given rely, we check it for bo stability. This is somewhat too 
-         severe, but never mind: it just introduces incompleteness. Then we make sure that
+         severe, but never mind: it just introduces incompleteness. Hook we make sure that
          the other threads' guarantees are included in the rely.
          
          If we don't have a given rely, we do the cross-product check-bo-stability thing.
@@ -1173,13 +1138,13 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
            avoided xid.ipos "(by free names) Z3 check" (stringfun Uo) (* as well *)
           )
         else
-          (let boq = bo_stable_query_irecs xid.irec yid.irec in
+          (let boq = bo_stable_query xid.irec yid.irec in
            check_taut xid.ipos (stringfun Bo) boq;
-           if not (Formula.exists (is_recU <||> is_recLatest) (Intfdesc.pre xid))
+           if not (Formula.exists (is_recU (* <||> is_recLatest *)) (Intfdesc.pre xid))
            then 
-             avoided xid.ipos "(no U or latest) Z3 check" (stringfun Uo)
+             avoided xid.ipos (* "(no U or latest) uo stability check" *) "(no U) uo stability check" (stringfun Uo)
            else
-             (let uoq = uo_stable_query_irecs xid.irec yid.irec in
+             (let uoq = uo_stable_query xid.irec yid.irec in
               check_taut xid.ipos (stringfun Uo) uoq
              )
           )
@@ -1222,7 +1187,7 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
               in
               check_taut ct.tripletpos stringfun query
             in
-            pre_iter check_assert (fun _ -> ()) (cpre_of_ct Interference ct)
+            pre_iter check_assert (* (fun _ -> ()) *) (cpre_of_ct Interference ct)
         | Assign a
           when Assign.is_var_assign a ->
             (* uniqueness of write *)
@@ -1237,7 +1202,7 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
             let unique_ve (loc,e) =
               if NameSet.mem (Location.locv loc) !Coherence.coherence_variables then
                 (let rhs = 
-                   _recSofar Here Now (_recNotEqual (Location._recFloc loc) e) 
+                   _recSofar NoHook (_recNotEqual (Location._recFloc loc) e) 
                  in
                  let check_unique pre = 
                    let query = _recImplies pre rhs in
@@ -1248,7 +1213,7 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
                    in
                    check_taut ct.tripletpos stringfun query
                  in
-                 pre_iter check_unique (fun _ -> ()) (cpre_of_ct Elaboration ct) 
+                 pre_iter check_unique (* (fun _ -> ()) *) (cpre_of_ct Elaboration ct) 
                 )
               else ()
             in
@@ -1268,17 +1233,19 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
                   in
                   check_taut ct.tripletpos stringfun query
                 in
-                match epre, ipre with
-                | PreSingle e           , IpreSimple i      -> cii e i
-                | PreDouble (e, loc, er), IpreSimple i      -> cii e i
-                | PreDouble (e, loc, er), IpreRes    ir     -> cii er ir
-                | PreDouble (e, loc, er), IpreDouble (i,ir) -> cii e i; cii er ir
-                (* and then arity problem *)
-                | _                                         -> 
-                    report (Error (ct.tripletpos, "knot has reserved interference precondition, \
-                                                   but doesn't have reserved constraint(s)."
-                                  )
-                           )
+                (* match epre, ipre with
+                   | PreSingle e           , IpreSimple i      -> cii e i
+                   | PreDouble (e, loc, er), IpreSimple i      -> cii e i
+                   | PreDouble (e, loc, er), IpreRes    ir     -> cii er ir
+                   | PreDouble (e, loc, er), IpreDouble (i,ir) -> cii e i; cii er ir
+                   (* and then arity problem *)
+                   | _                                         -> 
+                       report (Error (ct.tripletpos, "knot has reserved interference precondition, \
+                                                      but doesn't have reserved constraint(s)."
+                                     )
+                              )
+                 *)
+                cii epre ipre
             );
             (* internal bo/uo parallelism *)
             let affected f assigned =
@@ -1287,7 +1254,7 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
             check_boparallel affected vassigns ct;
             let check_uo cintf = 
               let uo_needed apre assigned = 
-                Formula.exists ((is_recU <||> is_recLatest) <&&> (fun f -> affected f assigned)) apre
+                Formula.exists ((is_recU (* <||> is_recLatest *)) <&&> (fun f -> affected f assigned)) apre
               in
               check_uoparallel uo_needed vassigns ct; (* if repeated, memoisation will save us *)
               (* self-uo stability *)
@@ -1299,7 +1266,7 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
                 avoided ct.tripletpos "check of" stringfun
               else
                 (let cirec = cintf.irec in
-                 let query = Stability.uo_stable_internal_irecs cirec cirec in
+                 let query = Stability.uo_stable_query cirec cirec in
                  check_taut ct.tripletpos stringfun query;
                 )
             in
@@ -1430,11 +1397,11 @@ let checkproof_prog {p_preopt=preopt; p_givopt=givopt; p_ts=threads; p_postopt=p
              Formula.map number_reg tpost
            in
            let wrap i tpost =
-             threaded i (universal Now (pmsc_process i tpost))
+             threaded i (universal NoHook (pmsc_process i tpost))
            in
            let tpost = function
              | i, {t_body=Threadfinal tpost} -> wrap i tpost
-             | i, {t_postopt=Some knot}      -> wrap i (unres_precondition_of_knot (fun _ _ -> true) Elaboration knot)
+             | i, {t_postopt=Some knot}      -> wrap i (precondition_of_knot (fun _ _ -> true) Elaboration knot)
              | _                             -> _recTrue
            in
            let tposts = conjoin (List.map tpost (numbered threads)) in
