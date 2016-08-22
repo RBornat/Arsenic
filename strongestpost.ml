@@ -36,58 +36,42 @@ open Assign
       (P since Q)[varmapping = (-)(P since Q) /\ P[varmapping]
       
    ************************************************************************** *)
-(* three kinds of stability, three kinds of hatting.
-
-    ExtHat     : variables outside Bfr, Univ, Latest;
-    UExtHat    : variables outside Univ, Latest (and hat Bfr nodes as well);
-    InflightHat: variables and Latest outside Bfr, Univ
-    
-    and NoHat for completeness
-    
- *)
  
-type hatting = NoHat | ExtHat | UExtHat | InflightHat
-
-let string_of_hatting = function
-  | NoHat       -> "NoHat"
-  | ExtHat      -> "ExtHat"
-  | UExtHat     -> "UExtHat"
-  | InflightHat -> "InflightHat"
-
-let hatted hatting orig_f =
-  let rec opt_hat f =
+let enhat hatting orig_f =
+  let rec opt_hat binders f =
     match f.fnode with
-    | Fvar(Here,Now,v)          -> Some (_recFvar There Now v) (* even if it's bound *)
-    | Bfr (Here,Now,bf)         -> if hatting=UExtHat 
-                                   then Some (_recBfr There Now (hat bf))
-                                   else Some (conjoin [f; hat bf]) 
-    | Univ (Now,uf)             -> Some f (* don't touch it! *) 
-    | Latest (Here,Now,v)       -> if hatting=InflightHat 
-                                   then Some (_recLatest There Now v)
-                                   else Some f (* don't touch it! *)
-    | Sofar (Here,Now,sf)       -> Some (_recSofar There Now sf)    (* is the place parameter just laziness? *)
-    | Since (Here,Now,f1,f2)    -> Some (_recSince There Now f1 f2) (* is the place parameter just laziness? *)
-    (* we hat even inside binders. Oh yes. *)
-    (* | Binder (bk,n,bf)          -> (ohat &~ (_Some <.> _recBinder bk n)) bf 
-                                      |~~ (fun () -> Some f) (* sorry, but this is essential: 
-                                                                bound variables can't be hatted
-                                                              *)
+    | Fvar(None,NoHook,v)     -> if NameSet.mem v binders 
+                                 then None 
+                                 else Some (_recFvar (Some hatting) NoHook v) 
+    | Bfr (NoHook,bf)         -> if is_Tildehatting hatting 
+                                 then ohat binders bf &~~ (_Some <.> _recBfr NoHook)
+                                 else Some (conjoin [f; hat binders bf]) (* because B(P)=>P *)
+    | Univ (NoHook,uf)        -> Some (conjoin [f; hat binders uf])      (* because U(P)=>P *) 
+    (* | Latest (None,NoHook,v)       -> if hatting=InflightHat 
+                                      then Some (_recLatest There NoHook v)
+                                      else Some f (* don't touch it! *)
      *)
+    | Sofar (NoHook,sf)       -> ohat binders sf &~~ (_Some <.> _recSofar NoHook)
+    | Since (NoHook,f1,f2)    -> optionpair_either (ohat binders) f1 (ohat binders) f2
+                                 &~~ (_Some <.> uncurry2 (_recSince NoHook)) 
+    (* we hat even inside binders. Oh yes. *) 
+    | Binder (bk,n,bf)
+                              -> ohat (NameSet.add n binders) bf &~~ (_Some <.> _recBinder bk n)
     | Fvar    _           
     | Bfr     _           
     | Univ    _        
-    | Latest  _        
-    | Since   _                 -> raise (Invalid_argument (Printf.sprintf "Strongestpost.hatted.opt_hat %s in %s %s" 
-                                                                           (string_of_formula f)
-                                                                           (string_of_hatting hatting)
-                                                                           (string_of_formula orig_f)
-                                                           )
-                                         )
+    (* | Latest  _  *)      
+    | Since   _               -> raise (Invalid_argument (Printf.sprintf "Strongestpost.enhat.opt_hat %s in %s %s" 
+                                                                         (string_of_formula f)
+                                                                         (string_of_hatting hatting)
+                                                                         (string_of_formula orig_f)
+                                                         )
+                                       )
     | _                         -> None
-  (* and ohat f = Formula.optmap opt_hat f *)
-  and hat f = Formula.map opt_hat f
+  and ohat binders f = Formula.optmap (opt_hat binders) f
+  and hat binders f = Formula.map (opt_hat binders) f
   in
-  if hatting=NoHat then orig_f else hat orig_f
+  hat NameSet.empty orig_f
 
 let optsp_substitute mapping orig_f =
   let isvarmapping mapping f = 
@@ -101,57 +85,53 @@ let optsp_substitute mapping orig_f =
               ", which contains " ^ string_of_formula f))
   in
   let rec optsub mapping f = 
-    let domodality isU mm mf =
+    let domodality mm mf =
       (subopt mapping 
        &~ (fun mf' -> 
              if isvarmapping mapping f 
-             then Some (conjoin [mm Then mf; 
-                                 mf'; 
-                                 if isU then anyway (subopt mapping) (hatted UExtHat mf) else _recTrue
-                                ]
-                     )
-             else Some (mm Now mf')
+             then Some (conjoin [mm Hook mf; mf'])
+             else Some (mm NoHook mf')
           )
       ) mf
     in
     match f.fnode with
     | Freg   r                -> (try Some (mapping <@> r) with Not_found -> None)
     (* Flogc omitted deliberately: you can't assign to a logical constant *)
-    (* We only substitute for unhooked variables -- Here+Now, There+Now *)
-    | Fvar  (Here,Now,v)      -> (try Some (mapping <@> v) with Not_found -> None)
-    | Fvar (There,Now,v)      -> None (* Formula.optmap leaves it alone *)
+    (* We only substitute for unhooked variables -- None+NoHook, There+NoHook *)
+    | Fvar  (None,NoHook,v)   -> (try Some (mapping <@> v) with Not_found -> None)
+    | Fvar     (_,NoHook,v)   -> None (* Formula.optmap leaves it alone *)
     | Binder (bk,n,bf)        -> (subopt (List.remove_assoc n mapping) &~ (_Some <.> _recBinder bk n)) bf 
                                  |~~ (fun () -> Some f) (* sorry, but this is essential: bf can't be
                                                            substituted with the original mapping
                                                          *)
-    | Bfr (pl,Now,bf)         -> domodality false (_recBfr pl) bf
-    | Univ (Now,uf)           -> domodality true _recUniv uf
-    | Latest (pl,Now,v)       -> if List.mem_assoc v mapping 
-                                 then Some (_recLatest pl Then v)
-                                 else Some f
-    | Sofar (Here,Now, sf)    -> domodality false (_recSofar Here) sf
-    | Sofar (There,Now, sf)   -> Some f (* worried about this *)
-    | Since (Here,Now,f1,f2)  -> (if isvarmapping mapping f then
-                                    optionpair_either (subopt mapping) f1 (subopt mapping) f2
-                                    &~~ (fun (f1',_) -> Some (conjoin [_recSince Here Then f1 f2; f1']))
-                                  else
-                                    optionpair_either (subopt mapping) f1 (subopt mapping) f2
-                                    &~~ (fun (f1,f2) -> Some (_recSince Here Now f1 f2))
-                                 )
-                                 |~~ (fun () -> Some f)
-    | Since (There,Now,f1,f2) -> Some f (* worried about this *)
+    | Bfr (NoHook,bf)         -> domodality _recBfr bf
+    | Univ (NoHook,uf)        -> domodality _recUniv uf
+    (* | Latest (pl,NoHook,v)       -> if List.mem_assoc v mapping 
+                                       then Some (_recLatest pl Hook v)
+                                       else Some f
+     *)
+    | Sofar (NoHook, sf)      -> domodality _recSofar sf
+    | Since (NoHook,f1,f2)  -> (if isvarmapping mapping f 
+                                then (* x\xhook affects only f1 *)
+                                  subopt mapping f1 
+                                  &~~ (fun f1' -> Some (conjoin [f; f1']))
+                                else (* r\rhook affects both *)
+                                  optionpair_either (subopt mapping) f1 (subopt mapping) f2
+                                  &~~ (fun (f1,f2) -> Some (_recSince NoHook f1 f2))
+                               )
+                               |~~ (fun () -> Some f)
     | Fvar      _
     | Bfr       _           
     | Univ      _            
-    | Latest    _            
+    (* | Latest    _  *)          
     | Sofar     _             
-    | Since     _              -> raise (Invalid_argument (Printf.sprintf "sp_substitute [%s] %s, which contains %s" 
-                                                                          (string_of_assoc string_of_name string_of_formula "->" ";" mapping)
-                                                                          (string_of_formula orig_f) 
-                                                                          (string_of_formula f)
-                                                          )
-                                        )
-    | _                        -> None
+    | Since     _           -> raise (Invalid_argument (Printf.sprintf "sp_substitute [%s] %s, which contains %s" 
+                                                                       (string_of_assoc string_of_name string_of_formula "->" ";" mapping)
+                                                                       (string_of_formula orig_f) 
+                                                                       (string_of_formula f)
+                                                       )
+                                     )
+    | _                     -> None
   and subopt mapping = Formula.optmap (optsub mapping)
   in
   subopt mapping orig_f
@@ -163,7 +143,7 @@ let sp_substitute mapping f =
 let strongest_post with_result pre assign = 
   let decorate f = if with_result then f else _recTrue in
   let old_name name =
-    if Name.is_anyvar name then _recFvar Here Then name
+    if Name.is_anyvar name then _recFvar None Hook name
                            else _recFname (name ^ "!old")
   in
   let sp_multiple is_varsubst mapping locs es = 
@@ -175,7 +155,7 @@ let strongest_post with_result pre assign =
         let rec vsof vset f =
           let optvs fvs f = 
             match f.fnode with
-            | Fvar (Here,Now,v) -> Some (NameSet.add v fvs)
+            | Fvar (None,NoHook,v) -> Some (NameSet.add v fvs)
             | Binder (_,n,f)    -> let bvs = vsof NameSet.empty f in
                                    Some (NameSet.union fvs (NameSet.remove n bvs))
             | _                 -> None
@@ -185,20 +165,20 @@ let strongest_post with_result pre assign =
         let mvs f =
           let optmvs fvs f =
             match f.fnode with
-            | Bfr      (_,_,bf) -> Some (vsof fvs bf)
-            | Univ       (_,uf) -> Some (vsof fvs uf)
-            | Sofar    (_,_,sf) -> Some (vsof fvs sf)
-            | Since (_,_,f1,f2) -> Some (vsof (vsof fvs f1) f2)
-            | Binder (_,n,f)    -> let bvs = vsof NameSet.empty f in
-                                   Some (NameSet.union fvs (NameSet.remove n bvs))
-            | _                 -> None
+            | Bfr      (_,bf) -> Some (vsof fvs bf)
+            | Univ     (_,uf) -> Some (vsof fvs uf)
+            | Sofar    (_,sf) -> Some (vsof fvs sf)
+            | Since (_,f1,f2) -> Some (vsof (vsof fvs f1) f2)
+            | Binder  (_,n,f) -> let bvs = vsof NameSet.empty f in
+                                    Some (NameSet.union fvs (NameSet.remove n bvs))
+            | _               -> None
           in
           Formula.fold optmvs NameSet.empty f
         in
         let vars = mvs pre in
         let unchanged = NameSet.diff vars (NameSet.of_list (List.map fstof2 mapping)) in
-        conjoin (List.map (fun v -> _recEqual (_recFvar Here Now v)
-                                              (_recFvar Here Then v)
+        conjoin (List.map (fun v -> _recEqual (_recFvar None NoHook v)
+                                              (_recFvar None Hook v)
                           )
                           (NameSet.elements unchanged)
                 )
@@ -216,14 +196,14 @@ let strongest_post with_result pre assign =
   in
   match assign with
   | RbecomesE  (r,e)        -> sp_multiple false [r, old_name r] [VarLoc r] [e]
-  | LocbecomesEs (b,loces)  -> let locs, es = List.split loces in
+  | LocbecomesEs ((* b, *) loces)  -> let locs, es = List.split loces in
                                sp_multiple true (List.map (function VarLoc v         -> v, old_name v
                                                           )
                                                           locs
                                                 )
                                                 locs
                                                 es
-  | RsbecomeLocs (b,rslocs) -> let rss, locs = List.split rslocs in
+  | RsbecomeLocs ((* b, *) rslocs) -> let rss, locs = List.split rslocs in
                                let rs = List.concat rss in
                                let rs' = List.map old_name rs in
                                let sub = sp_substitute (List.combine rs rs') in
