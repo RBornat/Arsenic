@@ -99,7 +99,7 @@ let loces intfdesc =
 
 let assigned_vars intfdesc = 
   let locs, _ = List.split (loces intfdesc) in
-  List.map Location.locv locs
+  (* List.map Location.locv *) locs
 
 let actualvar = List.hd <.> assigned_vars 
 
@@ -118,7 +118,7 @@ let pre intfdesc =
        match f.fnode with
        | LogArith (f1, And, f2) -> rplacAnd f (preprop f1) (preprop f2)
        | Binder (Forall, x, bf) -> rplacForall f x (preprop bf)
-       | _                      -> Formula.universal Now f (* what the heck? *)
+       | _                      -> Formula.universal NoHook f (* what the heck? *)
      in
      {intfdesc with irec={intfdesc.irec with i_pre = preprop i.i_pre}}
  *)

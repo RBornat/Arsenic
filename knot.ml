@@ -43,16 +43,17 @@ let rec fold fstitch v knot =
 
 let iter fstitch = fold (fun () -> fstitch) ()
 
-let reservations =
-  let srev ress stitch =
-    match locopt_of_stitch stitch with
-    | None     -> ress
-    | Some loc -> if List.exists (Location.eq loc) ress
-                  then ress 
-                  else loc::ress
-  in
-  fold srev []
-  
+(* let reservations =
+     let srev ress stitch =
+       match locopt_of_stitch stitch with
+       | None     -> ress
+       | Some loc -> if List.exists (Location.eq loc) ress
+                     then ress 
+                     else loc::ress
+     in
+     fold srev []
+ *)
+ 
 (* ******************** exists for knots, why not? ************************ *)
 
 let rec exists pstitch knot =
@@ -85,11 +86,12 @@ let string_of_pkind = function
   | Elaboration     -> "Elaboration" 
   | Interference    -> "Interference"
 
-type pre =
-  | PreSingle of formula
-  | PreDouble of formula * location list * formula (* unreserved, reservations, reserved *)
+type pre = formula (* cutting out the lwarx stwcx. treatment *)
+  (* | PreSingle of formula
+     | PreDouble of formula * location list * formula (* unreserved, reservations, reserved *)
+   *)
 
-let string_of_pre = function
+let string_of_pre = string_of_formula (* function
   | PreSingle f            -> "PreSingle(" ^ string_of_formula f ^ ")"
   | PreDouble (f1,locs,f2) -> "PreDouble(" ^ string_of_formula f1 
                                            ^ "," 
@@ -97,31 +99,36 @@ let string_of_pre = function
                                            ^ "."
                                            ^ string_of_formula f2 
                                            ^ ")"
+ *)
 
-let pre_fold fpre floc v = function
-  | PreSingle pre                 -> fpre v pre
-  | PreDouble (pre, locs, preres) -> let v = fpre v pre in
-                                     let v = List.fold_left floc v locs in
-                                     fpre v preres
-  
-let pre_iter fpre floc = pre_fold (fun () -> fpre) (fun () -> floc) () 
+let pre_fold fpre = fpre
+(* let pre_fold fpre floc v = function
+    | PreSingle pre                 -> fpre v pre
+    | PreDouble (pre, locs, preres) -> let v = fpre v pre in
+                                       let v = List.fold_left floc v locs in
+                                       fpre v preres
+ *)
+
+let pre_iter fpre = pre_fold (fun () -> fpre) () 
+(* let pre_iter fpre floc = pre_fold (fun () -> fpre) (fun () -> floc) () *)
 
 let precondition_of_knot go_sat pkind knot =
-  let okres withres s = 
-    match locopt_of_stitch s with
-    | None   -> true
-    | Some _ -> withres
-  in
-  let rec ass_k withres withgo k = 
+  (* let okres withres s = 
+       match locopt_of_stitch s with
+       | None   -> true
+       | Some _ -> withres
+     in
+   *)
+  let rec ass_k (* withres *) withgo k = 
     match k.knotnode with
     | SimpleKnot stitches -> 
         (let join = conjoin <.> List.map assertion_of_stitch in
          let okgo = if withgo then (fun _ -> true) else not <.> Stitch.is_go in
-         join (List.filter (okgo <&&> okres withres) stitches)
+         join (List.filter (okgo (* <&&> okres withres *)) stitches)
         )
-    | KnotAnd     (k1,k2) -> conjoin (List.map (ass_k withres withgo) [k1;k2])
+    | KnotAnd     (k1,k2) -> conjoin (List.map (ass_k (* withres *) withgo) [k1;k2])
     | KnotOr      (k1,k2) 
-    | KnotAlt     (k1,k2) -> disjoin (List.map (ass_k withres withgo) [k1;k2])
+    | KnotAlt     (k1,k2) -> disjoin (List.map (ass_k (* withres *) withgo) [k1;k2])
   in
   (* this wasn't ok: quotienting isn't the same as sat. I think ...
      let sat f = (* I hope this is ok ... maybe do it better one day *)
@@ -129,26 +136,28 @@ let precondition_of_knot go_sat pkind knot =
        Formula.bindExists frees f
      in
    *)
-  let pre withres = 
+  let pre (* withres *) = 
     match pkind with
-    | Interference   -> ass_k withres true knot
-    | Elaboration    -> let e = ass_k withres false knot in
-                        if exists (okres withres <&&> Stitch.is_go) knot then
-                          (if go_sat knot.knotloc (ass_k withres true knot)
+    | Interference   -> ass_k (* withres *) true knot
+    | Elaboration    -> let e = ass_k (* withres *) false knot in
+                        if exists ((* okres withres <&&> *) Stitch.is_go) knot then
+                          (if go_sat knot.knotloc (ass_k (* withres *) true knot)
                            then e
                            else _recFalse (* not satisfiable with go in, so false *)
                           )
                         else e
   in
-  if exists (function {stitchlocopt=Some _} -> true
-             |        _                     -> false
-            )
-            knot
-  then PreDouble (pre false, reservations knot, pre true)
-  else PreSingle (pre false)
+  (* if exists (function {stitchlocopt=Some _} -> true
+                |        _                     -> false
+               )
+               knot
+     then PreDouble (pre false, reservations knot, pre true)
+     else PreSingle (pre false)
+   *)
+  pre
   
-let unres_precondition_of_knot go_sat pkind knot =
-  match precondition_of_knot go_sat pkind knot with
-  | PreSingle pre       -> pre
-  | PreDouble (pre,_,_) -> pre
-  
+(* let unres_precondition_of_knot go_sat pkind knot =
+     match precondition_of_knot go_sat pkind knot with
+     | PreSingle pre       -> pre
+     | PreDouble (pre,_,_) -> pre
+ *)  

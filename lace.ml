@@ -449,20 +449,21 @@ let check_constraints_thread preopt postopt labmap opgraph thread =
                                               "component which is not variable assignment"
      | _  -> ()
     );
-    (* load_reserved can't have a reservation stitch *)
-    (match target_cid, locopt_of_stitch stitch with
-     | CidSimplecom ct, Some _ 
-         when Com.is_loadreserved ct  ->
-           badtarget "reservation stitch" "load_reserved"
-     | _                             -> ()
-    );
-    (* reservation stitch may not target load_reserved or thread post *)
-    (match is_reserved_stitch stitch, target_cid with
-     | true, CidSimplecom ct 
-        when Com.is_loadreserved ct -> badtarget "reservation stitch" "load_reserved"
-     | true, CidThreadPost _       -> badtarget "reservation stitch" "thread postcondition"
-     | _                           -> ()
-    );
+    (* (* load_reserved can't have a reservation stitch *)
+       (match target_cid, locopt_of_stitch stitch with
+        | CidSimplecom ct, Some _ 
+            when Com.is_loadreserved ct  ->
+              badtarget "reservation stitch" "load_reserved"
+        | _                             -> ()
+       );
+       (* reservation stitch may not target load_reserved or thread post *)
+       (match is_reserved_stitch stitch, target_cid with
+        | true, CidSimplecom ct 
+           when Com.is_loadreserved ct -> badtarget "reservation stitch" "load_reserved"
+        | true, CidThreadPost _       -> badtarget "reservation stitch" "thread postcondition"
+        | _                           -> ()
+       )
+     *)
 
     (* ****** source stuff ******* *)
     
@@ -476,30 +477,34 @@ let check_constraints_thread preopt postopt labmap opgraph thread =
      | CidFinal      _ -> badsource "stitch" "final state"
      | CidThreadPost _ -> badsource "stitch" "thread postcondition"
      | _               -> ()
-    );
-    (* reservation stitches may not source a store-conditional or initial state. *)
-    (match is_reserved_stitch stitch, source_cid with
-     | true, CidControl c -> (match c with
-                              | CExpr   ft -> ()
-                              | CAssign _  -> badsource "reservation stitch" "store-conditional"
-                             )
-     | true, CidInit _    -> badsource "reservation stitch" "initial state"
-     | _                  -> () 
     )
+    (* ;
+       (* reservation stitches may not source a store-conditional or initial state. *)
+       (match is_reserved_stitch stitch, source_cid with
+        | true, CidControl c -> (match c with
+                                 | CExpr   ft -> ()
+                                 | CAssign _  -> badsource "reservation stitch" "store-conditional"
+                                )
+        | true, CidInit _    -> badsource "reservation stitch" "initial state"
+        | _                  -> () 
+       ) 
+     *)
   in
   let check_constraints_knot poslab knot =
     (* check the stitches *)
-    Knot.iter (check_constraints_stitch poslab) knot;
-    (* check reservations *)
-    let ress = Knot.reservations knot in
-    let resn = List.length ress in
-    if resn>1 then
-      report (Error (knot.knotloc,
-                     Printf.sprintf "knot appeals to reservations for %s locations -- %s"
-                                    (if resn=2 then "two" else "several")
-                                    (Listutils.standard_phrase_of_list Location.string_of_location (List.rev ress))
-                    )
-             )
+    Knot.iter (check_constraints_stitch poslab) knot
+    (* ;
+       (* check reservations *)
+       let ress = Knot.reservations knot in
+       let resn = List.length ress in
+       if resn>1 then
+         report (Error (knot.knotloc,
+                        Printf.sprintf "knot appeals to reservations for %s locations -- %s"
+                                       (if resn=2 then "two" else "several")
+                                       (Listutils.standard_phrase_of_list Location.string_of_location (List.rev ress))
+                       )
+                )
+     *)
   in
   let knot_coverage origin all_paths_to knot =
     let rec fka knot =
@@ -636,13 +641,14 @@ let check_constraints_thread preopt postopt labmap opgraph thread =
                          knotmap
   in
   let check_constraints_simplecomtriplet knotmap ct =
-    (* check the arity of the ipre option *)
-    (match ct.tripletof.sc_ipreopt, precondition_of_knot (fun _ _ -> true) Interference ct.tripletknot with
-     | Some (IpreDouble _), PreSingle _ 
-     | Some (IpreRes    _), PreSingle _ -> 
-         report (Error (ct.tripletpos, "knot and command cannot generate reservation-interference precondition"))
-     | _                                -> ()
-    );
+    (* (* check the arity of the ipre option *)
+       (match ct.tripletof.sc_ipreopt, precondition_of_knot (fun _ _ -> true) Interference ct.tripletknot with
+        | Some (IpreDouble _), PreSingle _ 
+        | Some (IpreRes    _), PreSingle _ -> 
+            report (Error (ct.tripletpos, "knot and command cannot generate reservation-interference precondition"))
+        | _                                -> ()
+       );
+     *)
     check_constraints_triplet knotmap ct
   in
   Thread.tripletfold check_constraints_simplecomtriplet check_constraints_triplet KnotMap.empty thread
@@ -678,16 +684,16 @@ let check_coincidence_formula binders =
     in
     match f.fnode with
     | Univ (_,uf)       -> Some (ccf binders (Some f) uf)
-    | Bfr (_,_,bf)      -> Some (ccf binders (Some f) bf)
+    | Bfr (_,bf)        -> Some (ccf binders (Some f) bf)
     | Binder (bk,n,bf)  -> Some (ccf (NameSet.add n binders) ubfopt bf)
-    | Since (_,_,f1,f2) -> reportit ();
+    | Since (_,f1,f2)   -> reportit ();
                            ccf binders ubfopt f1;
                            ccf binders ubfopt f2;
                            Some ()
-    | Sofar (_,_,sf)    -> do_sofar sf
+    | Sofar (_,sf)      -> do_sofar sf
     | f                 -> 
         (match extract_ouat f with
-         | Some (_,_,sf) -> do_sofar sf
+         | Some (_,sf)   -> do_sofar sf
          | None          -> None
         )
   and ccf binders ubfopt = Formula.fold (ccf_opt binders ubfopt) () in
