@@ -99,6 +99,9 @@ rule make_token = parse
   | '>'         {GREATER}
   | ">="        {GREATEREQUAL}
   | '^'         {HAT}
+  | "^^"        {DHAT}
+  | '~'         {HAT}
+  | "~~"        {DTILDE}
 
   | "/\\"       {AND}
   | "\\/"       {OR}
