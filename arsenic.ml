@@ -33,29 +33,11 @@ let parse opts usage filename =
        | exn                    -> raise exn
      );
   close_in ch;
-  let in_channel = open_in filename in
-  let lexbuf = Lexing.from_channel in_channel in
-  try
-    let result = Parser.program Lexer.make_token lexbuf in
-    close_in in_channel; 
-    result
-  with
-  | Parsing.Parse_error ->
-      (close_in in_channel;
-       let curr = lexbuf.Lexing.lex_curr_p in
-       raise (Error ("**Parse error at line "^string_of_int (curr.Lexing.pos_lnum)^ 
-                     " character "^string_of_int (curr.Lexing.pos_cnum-curr.Lexing.pos_bol)^
-                     " (just before \""^Lexing.lexeme lexbuf^"\")"))
-                    )
-  | Program.ParseError(loc,s) ->
-        (close_in in_channel;
-         raise (Error ("\n**SYNTAX ERROR at "^string_of_sourcepos loc ^ ": " ^ s))
-        )
-  | Lexer.LexError(loc,s) -> 
-        (close_in in_channel;
-         raise (Error ("\n**LEXING ERROR at "^string_of_sourcepos loc ^ ": " ^ s))
-        )
-  | exn -> (close_in in_channel; raise exn)
+  (try Parseutils.parse_program filename
+   with 
+   | Parseutils.Error s -> raise (Error s)
+   | exn                -> raise exn
+  )
 
 let checkfile opts usage filename = 
   AskZ3.z3_querycount:=0;
