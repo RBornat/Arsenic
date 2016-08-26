@@ -211,8 +211,8 @@ let rec latex_of_primary f =
     Printf.sprintf "%s(%s)" name args
   in
   match extract_shorthand f with
-  | Some (_,name,f) -> sname name ^ bracketed_latex_of_formula f
-  | _                 ->
+  | Some (Ouat(_,f)) -> sname m.ouat_token ^ bracketed_latex_of_formula f
+  | _                ->
       match f.fnode with
       | Fint   i             -> i
       | Fbool  b             -> latex_of_bool b

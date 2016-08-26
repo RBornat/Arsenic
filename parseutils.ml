@@ -13,7 +13,7 @@ exception Error of string
 let parse_formula default string =
   let lexbuf = Lexing.from_string string in
   try
-    Settings.temp_setting Settings.allow_tcep true
+    Settings.temp_setting Settings.allow_special_formulas true
                           (fun () -> Parser.justaformula Lexer.make_token lexbuf)
   with 
   | Parsing.Parse_error ->

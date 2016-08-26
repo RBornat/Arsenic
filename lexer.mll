@@ -138,6 +138,7 @@ rule make_token = parse
   | "_cv"       {COHEREVAR}
   | "latest"    {LATEST}
   | "?"         {QUERY}
+  | "@"         {ATTHREAD}
   
   | "guarantee" {GUARANTEE}
   | "guar"      {GUARANTEE}

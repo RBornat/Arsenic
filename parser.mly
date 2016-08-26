@@ -534,7 +534,7 @@
 %token LESS LESSEQUAL EQUAL NOTEQUAL GREATEREQUAL GREATER
 /* logical operators */
 %token IMPLIES IFF AND OR NOT EXISTS FORALL
-%token HAT DHAT TILDE DTILDE
+%token HAT DHAT TILDE DTILDE ATTHREAD
 
 %left COMMA
 /* %nonassoc AT */
@@ -824,34 +824,34 @@ fname:
   | PMSREG                              { fadorn (classify_var $1) }
 
 place:
-  | LPAR hatting RPAR                   {if !Settings.allow_tcep then Some $2
+  | LPAR hatting RPAR                   {if !Settings.allow_special_formulas then Some $2
                                          else bad "hatting not allowed in assertions or formulae"
                                         }
   |                                     {None}
   
 time:
-  | LPAR MINUS RPAR                     {if !Settings.allow_tcep then Hook
+  | LPAR MINUS RPAR                     {if !Settings.allow_special_formulas then Hook
                                          else bad "(-) not allowed in assertions or formulae"
                                         }
   |                                     {NoHook}
   
 tcep:
-  | LPAR hatting RPAR LPAR MINUS RPAR       {bad (if !Settings.allow_tcep then 
+  | LPAR hatting RPAR LPAR MINUS RPAR       {bad (if !Settings.allow_special_formulas then 
                                                 "cannot have both hatting and (-) prefixes"
                                               else 
                                                 "hatting and (-) not allowed in assertions or formulae"
                                              )
                                         }
-  | LPAR MINUS RPAR LPAR hatting RPAR       {bad (if !Settings.allow_tcep then 
+  | LPAR MINUS RPAR LPAR hatting RPAR       {bad (if !Settings.allow_special_formulas then 
                                                 "cannot have both (-) and hatting prefixes"
                                               else 
                                                 "(-) and hatting not allowed in assertions or formulae"
                                              )
                                         }
-  | LPAR hatting RPAR                       {if !Settings.allow_tcep then Some $2, NoHook
+  | LPAR hatting RPAR                       {if !Settings.allow_special_formulas then Some $2, NoHook
                                          else bad "hatting not allowed in assertions or formulae"
                                         }
-  | LPAR MINUS RPAR                     {if !Settings.allow_tcep then None, Hook
+  | LPAR MINUS RPAR                     {if !Settings.allow_special_formulas then None, Hook
                                          else bad "(-) not allowed in assertions or formulae"
                                         }
   |                                     {None, NoHook}
@@ -939,7 +939,7 @@ primary:
                                            bad (string_of_name $3 ^ " should be variable in coherence formula");
                                          fadorn (Cohere ($3, check_anypure true $5, check_anypure true $7))
                                         }
-  | COHEREVAR LPAR name RPAR            {if !Settings.allow_tcep then 
+  | COHEREVAR LPAR name RPAR            {if !Settings.allow_special_formulas then 
                                            fadorn (_App (Formula.coherevar_token) 
                                                         [fadorn (_Fname $3)]
                                                   )
@@ -966,11 +966,14 @@ primary:
   | tcep BFR LPAR formula RPAR          {let pl, wh = $1 in
                                          no_hats pl (fadorn (Bfr (wh,$4)))
                                         }
-  | time UNIV LPAR formula RPAR        {fadorn (Univ ($1,$4))}
-  | time FANDW LPAR formula RPAR       {if !Settings.allow_tcep then fadorn (Fandw ($1,$4))
+  | time UNIV LPAR formula RPAR         {fadorn (Univ ($1,$4))}
+  | time FANDW LPAR formula RPAR        {if !Settings.allow_special_formulas then fadorn (Fandw ($1,$4))
                                          else bad (Formula.m_Fandw_token ^ " not allowed in assertions or formulas")
                                         }
-                                        
+  
+  | primary ATTHREAD INT                {if !Settings.allow_special_formulas then fadorn (Threaded (int_of_string $3,$1))
+                                         else bad (Formula.m_atthread_token ^ " not allowed in assertions or formulas")
+                                        }
   | EXISTS boundnames primary           {makebinder _Exists $2 $3}
   | FORALL boundnames primary           {makebinder _Forall $2 $3}
   
