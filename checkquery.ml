@@ -22,7 +22,7 @@ exception Error of string
 let parse_queries_from_channel in_channel =
   let lexbuf = Lexing.from_channel in_channel in
   try
-    let result = temp_setting Settings.allow_tcep true (fun () -> Parser.queries Lexer.make_token lexbuf) in
+    let result = temp_setting Settings.allow_special_formulas true (fun () -> Parser.queries Lexer.make_token lexbuf) in
     result
   with
   | Parsing.Parse_error ->
