@@ -1386,7 +1386,7 @@ let checkproof_prog {p_preopt=preopt; p_givopt=givopt; p_ts=threads; p_postopt=p
      | Some (poslab,progpost) ->
          (* to avoid cheating, add a pms thread *)
          let pms_tn = !Thread.threadcount in
-         Settings.temp_setting Thread.threadcount (!Thread.threadcount+1) (fun () ->
+         Settings.temp_setting Thread.threadcount (pms_tn+1) (fun () ->
            (* accumulate the postconditions of the threads *)
            let pmsc_process i tpost =
              let number_reg f =
@@ -1396,21 +1396,32 @@ let checkproof_prog {p_preopt=preopt; p_givopt=givopt; p_ts=threads; p_postopt=p
              in
              Formula.map number_reg tpost
            in
-           let wrap i tpost =
-             threaded i (universal NoHook (pmsc_process i tpost))
-           in
+           (* used to be let wrap i tpost =
+                           threaded i (universal NoHook (pmsc_process i tpost))
+                         in
+                         let tpost = function
+                           | i, {t_body=Threadfinal tpost} -> wrap i tpost
+                           | i, {t_postopt=Some knot}      -> wrap i (precondition_of_knot (fun _ _ -> true) Elaboration knot)
+                           | _                             -> _recTrue
+                         in
+                         let tposts = conjoin (List.map tpost (numbered threads)) in
+                         let pms_progpost = threaded pms_tn progpost in
+                         let query = _recImplies tposts pms_progpost in
+            *)
            let tpost = function
-             | i, {t_body=Threadfinal tpost} -> wrap i tpost
-             | i, {t_postopt=Some knot}      -> wrap i (precondition_of_knot (fun _ _ -> true) Elaboration knot)
-             | _                             -> _recTrue
+             | {t_body=Threadfinal tpost} -> tpost
+             | {t_postopt=Some knot     } -> precondition_of_knot (fun _ _ -> true) Elaboration knot
+             | _                          -> _recTrue
            in
-           let tposts = conjoin (List.map tpost (numbered threads)) in
-           let pms_progpost = threaded pms_tn progpost in
-           let query = _recImplies tposts pms_progpost in
+           let tposts = List.map tpost threads in
+           let tposts = List.map (uncurry2 pmsc_process) (numbered tposts) in
+           let wrapped = List.map (uncurry2 threaded) (numbered tposts) in
+           let unwrapped = List.map Modality.writes tposts in
+           let query = threaded pms_tn (_recImplies (conjoin (wrapped @ unwrapped)) progpost) in
            let stringfun () =
-             Printf.sprintf "inheritance of program postcondition %s from threads' postcondition %s"
+             Printf.sprintf "inheritance of program postcondition %s from threads' postconditions %s"
                             (string_of_formula progpost)
-                            (string_of_formula tposts)
+                            (bracketed_string_of_list string_of_formula tposts)
            in
            Settings.temp_setting AskZ3.in_pms true (fun () -> check_taut progpost.fpos stringfun query)
          )
