@@ -29,6 +29,65 @@ let get_coherence_vars binders =
   in
   Formula.fold (cof binders)
 
+(* an attempt to define writes(P), the assertion which can be said to be transmitted in 
+   interference by B(P) and to other threads by U(P). Idea is to stop assertions claiming
+   to transmit coincidences. Inspired by 
+        writes(A since B) = writes(A) /\ writes(ouat(B))
+ *)
+
+(* I'm not trying too hard to make this efficient. If it works I could memoise it *)
+
+let indivs pfrees _P = (* produce a conjunction of quantified univariate formulae *)
+    List.map (fun v -> bindExists (NameSet.remove v pfrees) _P)
+             (NameSet.elements pfrees)
+
+let univariate f = NameSet.cardinal (NameSet.filter Name.is_anyvar (Formula.frees f)) < 2
+
+let rec writes _P =
+  let bad f = raise (Error (Printf.sprintf "%s: writes(%s) inside %s"
+                                                (Sourcepos.string_of_sourcepos _P.fpos)
+                                                (string_of_formula f)
+                                                (string_of_formula _P)
+                           )
+                    )
+  in
+  let getvars f = NameSet.filter Name.is_anyvar (Formula.frees f) in
+  let univariate ns = NameSet.cardinal ns < 2 in
+  let opt_wrs f =
+    match extract_shorthand f with
+    | Some (Ouat(NoHook,nf)) ->
+        let vs = getvars nf in
+        if univariate vs then Some f else
+          (match nf.fnode with
+           | LogArith (f1,And,f2) ->
+               Some (conjoin [ouat NoHook (writes f1); ouat NoHook (writes f2)])
+           | _                    -> Some (conjoin (List.map (ouat NoHook) (indivs vs nf)))
+          )
+    | Some (Ouat _)          -> bad f
+    | _                      ->
+       match f.fnode with
+       | Since (NoHook, af, bf) -> Some (conjoin [writes af; writes (ouat NoHook bf)])
+       | Sofar (NoHook, sf)     -> 
+           let vs = getvars sf in 
+           if univariate vs then Some f
+           else
+             (match sf.fnode with 
+              | LogArith (f1,And,f2) ->
+                  Some (conjoin [sofar NoHook (writes f1); sofar NoHook (writes f2)])
+              | _                    -> Some sf (* I think it's as simple as that *)
+             )
+       | Bfr  (NoHook, mf) 
+       | Univ (NoHook, mf) -> Some (writes mf)
+       (* we don't want these bad forms of temporality *)
+       | Since _
+       | Sofar _
+       | Bfr   _
+       | Univ  _ -> bad f
+       (* otherwise look at its parts, please *)
+       | _       -> if univariate (getvars f) then Some f else None
+  in
+  Formula.map opt_wrs _P
+  
 (* we currently have two temporal modalities: B and Univ. They are handled as temporal assertions:
    B(P) means there was a time at which there was a barrier event, since which P held locally; 
    Univ(P) means the same thing but across all threads.
@@ -114,7 +173,7 @@ let rec simplify f =
              let history = conjoin (sf :: List.map (sofar None hk) indivs) in
              Some (simplify (conjoin [universal hk history; sofar None hk sf])) 
           *)
-         | _                 ->
+         |_                   ->
              (* can't see how to do this with Sofar translation above ...
                 (match extract_shorthand uf with
                  | Some (_,_,n,ouf) when n=m_ouat_token
@@ -123,7 +182,7 @@ let rec simplify f =
               *)
                   pushlogical (_recUniv hk) uf 
                   |~~ (fun () ->
-                          Some (simplify (since hk (simplify (fandw NoHook uf)) barrier_event_formula))
+                          Some (fandw hk (simplify (since NoHook uf barrier_event_formula)))
                        )
             (* ) *)
         )
@@ -148,14 +207,6 @@ let rec simplify f =
   let r = Formula.map optsimp f in
   (* Printf.printf "\nsimplify %s = %s" (string_of_formula f) (string_of_formula r); *)
   r
-
-and individualise p = (* for inside sofar *)
-  let pfrees = NameSet.filter Name.is_anyvar (Formula.frees p) in
-  if NameSet.cardinal pfrees<2 then 
-    [] (* not even two free variables: we don't need to touch it *)
-  else
-    List.map (fun v -> bindExists (NameSet.remove v pfrees) p)
-             (NameSet.elements pfrees)
 
 let allthreads f =
   conjoin (Array.to_list (Array.init !Thread.threadcount (fun i -> threaded i f)))
@@ -295,6 +346,7 @@ let embed bcxt cxt orig_f =
                  (_recImplies limits bf)
     in
     let tevw cxt hk ef =
+      Printf.printf "\ntranslating %s" (string_of_formula (_recFandw hk ef));
       let tidf = _recFname tid_name in
       let cxt, ef = 
         anyway2 (opttsf bounds (InU ef) tn (Some tidf) hiopt (hiformula_of_ep hk) bcxt) 
@@ -425,24 +477,18 @@ let embed bcxt cxt orig_f =
         Some (cxt, Some (conjoin [extra_f1; since_assert]))
     | Sofar (hk, sf) ->
         let do_sofar cxt tidopt extra_sf =
-          match sf.fnode with
-          | Since (NoHook,{fnode=Fandw(NoHook,uf)},f2) 
-              when f2=barrier_event_formula
-                          -> if noisy then Printf.printf "\n** modality.ml got one %s" (string_of_formula f);
-                             tevw cxt hk (rplacSofar uf NoHook uf)
-          | _             ->
-              (* same as since, except from the beginning of time *)
-              let hi = match hiopt with
-                       | None    -> history_index_name 
-                       | Some hi -> new_name history_index_name 
-              in
-              let hi_formula = _recFname hi in
-              let cxt, sf = anyway2 (opttsf bounds (InSofar sf) tn tidopt (Some hi) hi_formula bcxt) cxt sf in
-              let cmp_op = match hk with | NoHook -> _recLessEqual | Hook -> _recLess in
-              let sofar_assertion = 
-                bindForall (NameSet.singleton hi) (_recImplies (cmp_op hi_formula hicurr) sf)
-              in
-              Some (cxt, Some (conjoin [extra_sf; sofar_assertion]))
+          (* same as since, except from the beginning of time *)
+          let hi = match hiopt with
+                   | None    -> history_index_name 
+                   | Some hi -> new_name history_index_name 
+          in
+          let hi_formula = _recFname hi in
+          let cxt, sf = anyway2 (opttsf bounds (InSofar sf) tn tidopt (Some hi) hi_formula bcxt) cxt sf in
+          let cmp_op = match hk with | NoHook -> _recLessEqual | Hook -> _recLess in
+          let sofar_assertion = 
+            bindForall (NameSet.singleton hi) (_recImplies (cmp_op hi_formula hicurr) sf)
+          in
+          Some (cxt, Some (conjoin [extra_sf; sofar_assertion]))
         in
         (* if it's outside U, or not multivariate, just do it *)
         if tidopt=None ||
@@ -488,8 +534,16 @@ let embed bcxt cxt orig_f =
         None
   and opttsf bounds situation tn tidopt hiopt hicurr bcxt = 
     Formula.optmapfold (tsf bounds situation tn tidopt hiopt hicurr bcxt)
+  and individualise _P = 
+    let pfrees = NameSet.filter Name.is_anyvar (Formula.frees _P) in
+    if NameSet.cardinal pfrees<2 then 
+      [] (* not even two free variables: we don't need to touch it *)
+    else
+      List.map (fun v -> bindExists (NameSet.remove v pfrees) _P)
+               (NameSet.elements pfrees)
   in
   anyway2 (opttsf NameSet.empty Amodal !Thread.threadnum None None (_recFint "0") bcxt) cxt orig_f
+
 
 let mfilter = List.filter is_modalitybinding
 
