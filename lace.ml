@@ -661,7 +661,7 @@ let check_constraints_prog {p_preopt=preopt; p_givopt=givopt; p_ts=threads; p_po
 (* *********************** no universalised temporal coincidences **************************** *)
 
 let check_coincidence_bu binders f =
-  let f' = Modality.writes binders f in
+  let f' = Modality.enbar binders f in
   if not (Formula.eq f' f) then
     report 
       (Error 
