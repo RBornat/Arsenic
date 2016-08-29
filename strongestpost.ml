@@ -42,21 +42,22 @@ let enhat hatting orig_f =
     match f.fnode with
     | Fvar(None,NoHook,v)     -> if NameSet.mem v binders 
                                  then None 
-                                 else Some (_recFvar (Some hatting) NoHook v) 
+                                 else _SomeSome (_recFvar (Some hatting) NoHook v)
     | Bfr (NoHook,bf)         -> if is_Tildehatting hatting 
-                                 then ohat binders bf &~~ (_Some <.> _recBfr NoHook)
-                                 else Some (conjoin [f; hat binders bf]) (* because B(P)=>P *)
-    | Univ (NoHook,uf)        -> Some (conjoin [f; hat binders uf])      (* because U(P)=>P *) 
+                                 then ohat binders bf &~~ (_SomeSome <.> _recBfr NoHook)
+                                 else _SomeSome (conjoin [f; hat binders bf]) (* because B(P)=>P *)
+    | Univ (NoHook,uf)        -> _SomeSome (conjoin [f; hat binders uf])      (* because U(P)=>P *) 
     (* | Latest (None,NoHook,v)       -> if hatting=InflightHat 
-                                      then Some (_recLatest There NoHook v)
-                                      else Some f (* don't touch it! *)
+                                      then _SomeSome (_recLatest There NoHook v)
+                                      else Some None (* don't touch it! *)
      *)
-    | Sofar (NoHook,sf)       -> ohat binders sf &~~ (_Some <.> _recSofar NoHook)
+    | Sofar (NoHook,sf)       -> ohat binders sf &~~ (_SomeSome <.> _recSofar NoHook)
     | Since (NoHook,f1,f2)    -> optionpair_either (ohat binders) f1 (ohat binders) f2
-                                 &~~ (_Some <.> uncurry2 (_recSince NoHook)) 
+                                 &~~ (_SomeSome <.> uncurry2 (_recSince NoHook)) 
     (* we hat even inside binders. Oh yes. *) 
     | Binder (bk,n,bf)
-                              -> ohat (NameSet.add n binders) bf &~~ (_Some <.> _recBinder bk n)
+                              -> (ohat (NameSet.add n binders) bf &~~ (_SomeSome <.> _recBinder bk n))
+                                 |~~ (fun () -> Some None)
     | Fvar    _           
     | Bfr     _           
     | Univ    _        
@@ -89,37 +90,35 @@ let optsp_substitute mapping orig_f =
       (subopt mapping 
        &~ (fun mf' -> 
              if isvarmapping mapping f 
-             then Some (conjoin [mm Hook mf; mf'])
-             else Some (mm NoHook mf')
+             then _SomeSome (conjoin [mm Hook mf; mf'])
+             else _SomeSome (mm NoHook mf')
           )
       ) mf
     in
     match f.fnode with
-    | Freg   r                -> (try Some (mapping <@> r) with Not_found -> None)
+    | Freg   r                -> (try _SomeSome (mapping <@> r) with Not_found -> None)
     (* Flogc omitted deliberately: you can't assign to a logical constant *)
     (* We only substitute for unhooked variables -- None+NoHook, There+NoHook *)
-    | Fvar  (None,NoHook,v)   -> (try Some (mapping <@> v) with Not_found -> None)
+    | Fvar  (None,NoHook,v)   -> (try _SomeSome (mapping <@> v) with Not_found -> None)
     | Fvar     (_,NoHook,v)   -> None (* Formula.optmap leaves it alone *)
-    | Binder (bk,n,bf)        -> (subopt (List.remove_assoc n mapping) &~ (_Some <.> _recBinder bk n)) bf 
-                                 |~~ (fun () -> Some f) (* sorry, but this is essential: bf can't be
-                                                           substituted with the original mapping
-                                                         *)
+    | Binder (bk,n,bf)        -> (subopt (List.remove_assoc n mapping) &~ (_SomeSome <.> _recBinder bk n)) bf 
+                                 |~~ (fun () -> Some None) (* don't touch it! *)
     | Bfr (NoHook,bf)         -> domodality _recBfr bf
     | Univ (NoHook,uf)        -> domodality _recUniv uf
     (* | Latest (pl,NoHook,v)       -> if List.mem_assoc v mapping 
-                                       then Some (_recLatest pl Hook v)
-                                       else Some f
+                                       then _SomeSome (_recLatest pl Hook v)
+                                       else Some None
      *)
     | Sofar (NoHook, sf)      -> domodality _recSofar sf
     | Since (NoHook,f1,f2)  -> (if isvarmapping mapping f 
                                 then (* x\xhook affects only f1 *)
                                   subopt mapping f1 
-                                  &~~ (fun f1' -> Some (conjoin [f; f1']))
+                                  &~~ (fun f1' -> _SomeSome (conjoin [f; f1']))
                                 else (* r\rhook affects both *)
                                   optionpair_either (subopt mapping) f1 (subopt mapping) f2
-                                  &~~ (fun (f1,f2) -> Some (_recSince NoHook f1 f2))
+                                  &~~ (fun (f1,f2) -> _SomeSome (_recSince NoHook f1 f2))
                                )
-                               |~~ (fun () -> Some f)
+                               |~~ (fun () -> Some None)
     | Fvar      _
     | Bfr       _           
     | Univ      _            

@@ -70,8 +70,8 @@ let map f_intf f_formula = anyway (optmap f_intf f_formula)
 let rec optstripspos intfdesc =
   optmap 
     (function  | {ipos=spos} when spos=dummy_spos -> None
-               | intfdesc                     -> Some (stripspos {intfdesc with ipos=dummy_spos}))
-    Formula.optstripspos 
+               | intfdesc                         -> Some (stripspos {intfdesc with ipos=dummy_spos}))
+    Formula.stripspos_opt 
     intfdesc
     
 and stripspos intfdesc = (optstripspos ||~ id) intfdesc

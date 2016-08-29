@@ -128,7 +128,7 @@ let formulas fs = function
                      rslocs
 
 let assigned = function
-  | RbecomesE (r,e)        -> NameSet.singleton r
+  | RbecomesE (r,e)               -> NameSet.singleton r
   | LocbecomesEs ((* b, *) loces) -> NameSet.of_list (List.map (function (VarLoc v,e)       -> v) loces)
   | RsbecomeLocs ((* b, *) rsv_s) -> NameSet.of_list (List.concat (fstof2 (List.split rsv_s)))
 
@@ -136,7 +136,7 @@ let optmap af ff a =
   let opmloc = function VarLoc v -> None in
   match af ff a with
   | None -> (match a with 
-             | RbecomesE (r,e)         -> optmap ff e 
+             | RbecomesE (r,e)         -> Formula.optmap ff e 
                                           &~~ (fun e' -> Some (RbecomesE (r,e')))
              | LocbecomesEs ((* b, *) loces)  -> let locs, es = List.split loces in
                                           optionpair_either (optmap_any opmloc) locs
@@ -157,7 +157,7 @@ let substitute mapping = function (* does locs as well *) (* no it doesn't *)
                    ) 
   | a                    -> a
 
-let optstripspos = optmap (fun ff a -> None) Formula.optstripspos
+let optstripspos = optmap (fun ff a -> None) Formula.stripspos_opt
 
 let stripspos = optstripspos ||~ id
 
