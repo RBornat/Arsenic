@@ -182,7 +182,15 @@ let rec simplify f =
               *)
                   pushlogical (_recUniv hk) uf 
                   |~~ (fun () ->
-                          Some (fandw hk (simplify (since NoHook uf barrier_event_formula)))
+                          (* this is the 'old' way, which quantifies (fandw) across threads. But then
+                             so does the 'new' way below. And at least this one aligns the boundary
+                             events, which is a reasonable abstraction. Aligning them properly with
+                             the 'new' treatment would be a bit scary. I might attempt it one day.
+                           *)
+                          Some (simplify (since hk (simplify (fandw NoHook uf)) barrier_event_formula))
+                          (* the 'new way
+                             Some (fandw hk (simplify (since NoHook uf barrier_event_formula)))
+                           *)
                        )
             (* ) *)
         )
