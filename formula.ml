@@ -381,6 +381,39 @@ let ouat hk f = match f.fnode with
 let threaded atf f = rplacThreaded f atf f 
 
 let formula_of_threadid = _recFint <.> string_of_int
+
+let rec deconjoin f =
+  match f.fnode with
+  | Not nf                 -> (dedisjoin &~ _Some) nf
+  | LogArith (f1, And, f2) ->
+      (match deconjoin f1, deconjoin f2 with
+       | Some f1s, Some f2s -> Some (f1s@f2s)
+       | Some f1s, None     -> Some (f1s@[f2])
+       | None    , Some f2s -> Some (f1::f2s)
+       | _                  -> Some [f1;f2]
+      )
+  | _                      -> None
+  
+and dedisjoin f =
+  match f.fnode with
+  | Not nf                     -> deconjoin nf
+  | LogArith (f1, Implies, f2) -> 
+      (let notf1 = _recNot f1 in
+       match dedisjoin notf1, dedisjoin f2 with
+       | Some f1s, Some f2s -> Some (f1s@f2s)
+       | Some f1s, None     -> Some (f1s@[f2])
+       | None    , Some f2s -> Some (notf1::f2s)
+       | _                  -> Some [notf1;f2]
+      )
+  | LogArith (f1, Or     , f2) ->
+      (match dedisjoin f1, dedisjoin f2 with
+       | Some f1s, Some f2s -> Some (f1s@f2s)
+       | Some f1s, None     -> Some (f1s@[f2])
+       | None    , Some f2s -> Some (f1::f2s)
+       | _                  -> Some [f1;f2]
+      )
+  | _                          -> None
+    
  
 (* ********************* string_of_formula etc. *********************** *)
 
@@ -931,9 +964,10 @@ let optfold (optp: 'a -> formula -> 'a option) x =
 
 let fold optp x f = (revargs (optfold optp) f ||~ id) x
 
-(* traversing a formula and modifying it: None if no change, Some f' if it changes *)
-
-(* map for a formula. optp x f delivers Some x' when it changes, None when it doesn't *)
+(* traversing a formula and modifying it: None if no change, Some f' if it changes.
+   Note that the function ff now gives back Some r if it knows the answer (so r is an option)
+   or None if it doesn't. Hope this works ...
+ *)
 
 let optmap ff f =
   let take1 c x = Some {f with fnode = c x} in
@@ -941,30 +975,30 @@ let optmap ff f =
   let take3 c (f1,f2,f3) = Some {f with fnode = c f1 f2 f3} in
   let rec trav f =
     match ff f with
-    | Some f as result -> result
-    | _                -> match f.fnode with 
-                          | Fint     _
-                          | Fbool    _
-                          | Freg     _
-                          | Fvar     _            
-                          | Flogc    _            -> None
-                          | Negarith f            -> trav f &~~ take1 _Negarith
-                          | Not      f            -> trav f &~~ take1 _Not
-                          | Arith    (f1,op,f2)   -> trav2 f1 f2 &~~ take2 (revargs _Arith op) 
-                          | LogArith (f1,op,f2)   -> trav2 f1 f2 &~~ take2 (revargs _LogArith op)
-                          | Compare  (f1,op,f2)   -> trav2 f1 f2 &~~ take2 (revargs _Compare op)
-                          | Binder   (bk,n,f)     -> trav f &~~ take1 (_Binder bk n)
-                          | Tuple    fs           -> optmap_any trav fs &~~ take1 _Tuple
-                          | Ite      (cf,tf,ef)   -> trav3 cf tf ef &~~ take3 _Ite
-                          | Since    (hk,f1,f2)   -> trav2 f1 f2 &~~ take2 (_Since hk)
-                          | Bfr      (hk,f)    -> trav f &~~ take1 (_Bfr hk)
-                          | Univ     (hk,f)       -> trav f &~~ take1 (_Univ hk)
-                          (* | Latest   _            -> None *)
-                          | Fandw    (hk,f)       -> trav f &~~ take1 (_Fandw hk)
-                          | App      (n,fs)       -> optmap_any trav fs &~~ take1 (_App n)
-                          | Sofar    (hk,f)       -> trav f &~~ take1 (_Sofar hk)
-                          | Cohere   (v,f1,f2)    -> trav2 f1 f2 &~~ take2 (_Cohere v)
-                          | Threaded (i,f)        -> trav f &~~ take1 (_Threaded i) 
+    | Some result -> result
+    | _           -> match f.fnode with 
+                     | Fint     _
+                     | Fbool    _
+                     | Freg     _
+                     | Fvar     _            
+                     | Flogc    _            -> None
+                     | Negarith f            -> trav f &~~ take1 _Negarith
+                     | Not      f            -> trav f &~~ take1 _Not
+                     | Arith    (f1,op,f2)   -> trav2 f1 f2 &~~ take2 (revargs _Arith op) 
+                     | LogArith (f1,op,f2)   -> trav2 f1 f2 &~~ take2 (revargs _LogArith op)
+                     | Compare  (f1,op,f2)   -> trav2 f1 f2 &~~ take2 (revargs _Compare op)
+                     | Binder   (bk,n,f)     -> trav f &~~ take1 (_Binder bk n)
+                     | Tuple    fs           -> optmap_any trav fs &~~ take1 _Tuple
+                     | Ite      (cf,tf,ef)   -> trav3 cf tf ef &~~ take3 _Ite
+                     | Since    (hk,f1,f2)   -> trav2 f1 f2 &~~ take2 (_Since hk)
+                     | Bfr      (hk,f)       -> trav f &~~ take1 (_Bfr hk)
+                     | Univ     (hk,f)       -> trav f &~~ take1 (_Univ hk)
+                     (* | Latest   _            -> None *)
+                     | Fandw    (hk,f)       -> trav f &~~ take1 (_Fandw hk)
+                     | App      (n,fs)       -> optmap_any trav fs &~~ take1 (_App n)
+                     | Sofar    (hk,f)       -> trav f &~~ take1 (_Sofar hk)
+                     | Cohere   (v,f1,f2)    -> trav2 f1 f2 &~~ take2 (_Cohere v)
+                     | Threaded (i,f)        -> trav f &~~ take1 (_Threaded i) 
     and trav2 f1 f2 = optionpair_either trav f1 trav f2
     and trav3 f1 f2 f3 = optiontriple_either trav f1 trav f2 trav f3
     in
@@ -1043,16 +1077,19 @@ let substitute mapping orig_f =
   let rec sub_opt mapping = 
     let sub mapping f = 
       match f.fnode with
-      | Freg   r            -> (try Some (mapping <@> r) with Not_found -> None)
-      | Flogc  n            -> (try Some (mapping <@> n) with Not_found -> None)
-      | Fvar   (None,NoHook,v) -> (try Some (mapping <@> v) with Not_found -> None)
-      | Binder (bk,n,bf)    -> sub_opt (List.remove_assoc n mapping) bf 
-                               &~~ (_Some <.> rplacBinder f bk n)
-      | Cohere (v,f1,f2)    -> 
+      | Freg   r               -> (try Some (Some (mapping <@> r)) with Not_found -> None)
+      | Flogc  n               -> (try Some (Some (mapping <@> n)) with Not_found -> None)
+      | Fvar   (None,NoHook,v) -> (try Some (Some (mapping <@> v)) with Not_found -> None)
+      | Binder (bk,n,bf)       -> (sub_opt (List.remove_assoc n mapping) bf 
+                                   &~~ (_Some <.> (_Some <.> rplacBinder f bk n))
+                                  )
+                                  |~~ (fun () -> Some None) (* leave it alone *)
+      | Cohere (v,f1,f2)       -> 
           (try match mapping <@> v with
                | {fnode=Fvar(None,NoHook,v')} ->
-                   Some (_recCohere v' (anyway (sub_opt mapping) f1)
-                                       (anyway (sub_opt mapping) f2)
+                   Some (Some (_recCohere v' (anyway (sub_opt mapping) f1)
+                                             (anyway (sub_opt mapping) f2)
+                              )
                         )
                | other ->
                    raise (Substitute f)
@@ -1064,12 +1101,15 @@ let substitute mapping orig_f =
   in
   anyway (sub_opt mapping) orig_f
 
-let rec optreloc newloc f = 
-  optmap 
-    (function | {fpos=spos} when spos=newloc -> None
-              | f                          -> Some (reloc newloc {f with fpos=newloc}))
-                                          
-    f
+let rec reloc_opt newloc = function 
+  | {fpos=spos} when spos=newloc -> (* keep going *)
+      None 
+  | f                            -> (* change, and force scan of subformulas *)
+      Some (Some (reloc newloc {f with fpos=newloc}))
+    
+and stripspos_opt f = reloc_opt dummy_spos f
+
+and optreloc newloc = optmap (reloc_opt newloc)
 
 and reloc newloc f = (optreloc newloc ||~ id) f 
 
