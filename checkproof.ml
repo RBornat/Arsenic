@@ -1391,7 +1391,7 @@ let checkproof_prog {p_preopt=preopt; p_givopt=givopt; p_ts=threads; p_postopt=p
            let pmsc_process i tpost =
              let number_reg f =
                match f.fnode with
-               | Freg r -> Some (rplacFlogc f (pmsc_name i r))
+               | Freg r -> Option._SomeSome (rplacFlogc f (pmsc_name i r))
                | _      -> None
              in
              Formula.map number_reg tpost
@@ -1416,7 +1416,7 @@ let checkproof_prog {p_preopt=preopt; p_givopt=givopt; p_ts=threads; p_postopt=p
            let tposts = List.map tpost threads in
            let tposts = List.map (uncurry2 pmsc_process) (numbered tposts) in
            let wrapped = List.map (uncurry2 threaded) (numbered tposts) in
-           let unwrapped = List.map (Modality.writes NameSet.empty) tposts in
+           let unwrapped = List.map (Modality.enbar NameSet.empty) tposts in
            let query = threaded pms_tn (_recImplies (conjoin (wrapped @ unwrapped)) progpost) in
            let stringfun () =
              Printf.sprintf "inheritance of program postcondition %s from threads' postconditions %s"
