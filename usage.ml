@@ -28,6 +28,8 @@ let opts = Arg.align
                     Printf.sprintf " SC per location (default %B)" !param_SCloc);
                 ("-LocalSpec", Arg.Bool (set_bool param_LocalSpec), 
                     Printf.sprintf " don't speculate propagation (default %B)" !param_LocalSpec);
+                ("-allow_bu_coincidence", Arg.Bool (set_bool allow_bu_coincidence), 
+                    Printf.sprintf " allow temporal coincidences in _B and _U (default %B)" !allow_bu_coincidence);
                 ("-treeformulas", Arg.Bool (set_bool tree_formulas), 
                     Printf.sprintf " print big formulas as trees in error reports (default %B)" !tree_formulas);
                 ("-tree_formulas", Arg.Bool (set_bool tree_formulas), 

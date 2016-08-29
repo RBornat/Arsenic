@@ -660,54 +660,36 @@ let check_constraints_prog {p_preopt=preopt; p_givopt=givopt; p_ts=threads; p_po
 
 (* *********************** no universalised temporal coincidences **************************** *)
 
+let check_coincidence_bu binders f =
+  let f' = Modality.writes binders f in
+  if not (Formula.eq f' f) then
+    report 
+      (Error 
+         (f.fpos,
+          Printf.sprintf "%s contains temporal coincidence(s) -- use %s instead?"
+                         (string_of_formula f)
+                         (string_of_formula f')
+         )
+    )
+
 let check_coincidence_formula binders =
-  let rec ccf_opt binders ubfopt () f =
-    let reportit () =
-      match ubfopt with
-      | None     -> ()
-      | Some ubf -> 
-          report 
-            (Error 
-               (f.fpos,
-                Printf.sprintf "formula %s contains temporal coincidence %s"
-                               (string_of_formula ubf)
-                               (string_of_formula f)
+  Formula.fold (fun () subf -> match subf.fnode with
+                               | Bfr (hk, _)
+                               | Univ (hk, _) -> check_coincidence_bu binders subf;
+                                                 Some ()
+                               | _            -> None
                )
-          )
-    in
-    let do_sofar sf =
-      let sf_frees = Formula.frees sf in
-      if NameSet.cardinal (NameSet.diff sf_frees binders) > 1 then
-        reportit ();
-      ccf binders ubfopt sf;
-      Some ()
-    in
-    match f.fnode with
-    | Univ (_,uf)       -> Some (ccf binders (Some f) uf)
-    | Bfr (_,bf)        -> Some (ccf binders (Some f) bf)
-    | Binder (bk,n,bf)  -> Some (ccf (NameSet.add n binders) ubfopt bf)
-    | Since (_,f1,f2)   -> reportit ();
-                           ccf binders ubfopt f1;
-                           ccf binders ubfopt f2;
-                           Some ()
-    | Sofar (_,sf)      -> do_sofar sf
-    | f                 -> 
-        (match extract_ouat f with
-         | Some (_,sf)   -> do_sofar sf
-         | None          -> None
-        )
-  and ccf binders ubfopt = Formula.fold (ccf_opt binders ubfopt) () in
-  ccf binders None
+               ()
 
 let check_coincidence_thread thread =
   Thread.assertionfold (fun binders () -> check_coincidence_formula binders)
-                        ()
-                        thread
+                       ()
+                       thread
                         
 let check_coincidence_prog {p_preopt=preopt; p_givopt=givopt; p_ts=threads; p_postopt=postopt} =
   let cca fopt = 
     match fopt with 
-    | Some f -> check_coincidence_formula NameSet.empty f;
+    | Some f -> check_coincidence_formula NameSet.empty f
     | _      -> ()
   in
   let ccoa oaopt =
@@ -739,7 +721,7 @@ let lace_of_prog prog =
       show_result "lace knotmaps" (KnotMap.to_string OPSet.to_string) knotmaps ;
     if !errorcount<>0 then raise Abandon;
     (* check for universalised temporal coincidences *)
-    check_coincidence_prog prog;
+    if not (!Settings.allow_bu_coincidence) then check_coincidence_prog prog;
     (* and we don't abandon after that -- perhaps it should be done in checkproof ... *)
     labmaps, opgraphs, knotmaps
   )
