@@ -326,32 +326,33 @@ let latex_of_node = function
 let latex_of_stitch { stitchorder      = order; 
                       stitchsource     = source;
                       (* stitchlocopt     = locopt;
-                         stitchspopt      = spopt; 
                        *)
+                      stitchspopt      = spopt; 
                       stitchembroidery = assertion 
                     } =
-  (* let spstuff =
-       match !lacing, spopt with
-       | Embroider, Some (SpostSimple f        ) -> Printf.sprintf " \\{%s\\}" (latex_of_formula f)
+ let spstuff =
+      match !lacing, spopt with
+      | Embroider, Some f -> Printf.sprintf " \\{%s\\}" (latex_of_formula f)
+      | _                 -> ""
+  (*   | Embroider, Some (SpostSimple f        ) -> Printf.sprintf " \\{%s\\}" (latex_of_formula f)
        | Embroider, Some (SpostRes fres        ) -> Printf.sprintf " \\{ *:%s\\}" (latex_of_formula fres)
        | Embroider, Some (SpostDouble (f, fres)) -> Printf.sprintf " \\{%s; *:%s\\}" (latex_of_formula f) (latex_of_formula fres)
-       | _                                       -> ""
-     in
    *)
+  in
   let trailer =
     match !lacing with 
     | Embroider -> Printf.sprintf ": %s" (latex_of_formula assertion)
     | _         -> ""
   in
-  Printf.sprintf "%s %s%s" 
+  Printf.sprintf "%s %s%s%s" 
                  (sname (Order.string_of_order order))
                  (latex_of_node source)
                  (* (match locopt with
                      | None     -> ""
                      | Some loc -> Printf.sprintf "*%s" (latex_of_location loc)
                     )
-                    spstuff
                   *)
+                 spstuff
                  trailer
 
 let knotdisjunction = latex_of_logop Or

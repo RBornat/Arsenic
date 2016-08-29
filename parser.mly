@@ -41,7 +41,7 @@
   
   let intfadorn   i = Intfdesc.intfadorn (get_sourcepos()) i
   
-  let stitchadorn o n a = Stitch.stitchadorn (get_sourcepos()) o n a
+  let stitchadorn o n spo a = Stitch.stitchadorn (get_sourcepos()) o n spo a
   
   let knotadorn k = Knot.knotadorn (get_sourcepos()) k  
   
@@ -724,16 +724,17 @@ stitch:
   /* | order node stitchlocopt stitchspopt COLON formula            
                                         { stitchadorn $1 $2 $3 $4 (check_assertion false $6) }
    */
-  | order node COLON formula            
-                                        { stitchadorn $1 $2 (check_assertion false $4) }
+  | order node stitchspopt COLON formula            
+                                        { stitchadorn $1 $2 $3 (check_assertion false $5) }
 
 /* stitchlocopt:
      | QUERY location                      { Some ($2) }
      |                                     { None }
-  
-   stitchspopt:
-     | LBRACE formula RBRACE               { Some (SpostSimple (check_assertion false $2)) }
-     | LBRACE QUERY formula RBRACE         { Some (SpostRes (check_assertion false $3)) }
+ */
+
+stitchspopt:
+  | LBRACE formula RBRACE               { Some (check_assertion false $2) }
+/*   | LBRACE QUERY formula RBRACE         { Some (SpostRes (check_assertion false $3)) }
      | LBRACE formula SEMICOLON QUERY formula RBRACE 
                                            { Some (SpostDouble (check_assertion false $2, 
                                                                 check_assertion false $5
@@ -746,9 +747,10 @@ stitch:
                                                                )
                                                   ) 
                                            }
-     |                                     { None }
  */
- 
+
+  |                                     { None }
+
 node:
   | label                               { Cnode $1 }
   | label LPAR name RPAR                { CEnode ($1,

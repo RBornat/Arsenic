@@ -15,9 +15,10 @@ open Node
 type stitch = { stitchpos        : sourcepos; 
                 stitchorder      : order; 
                 stitchsource     : node; 
-                (* stitchlocopt     : location option;
+                (* stitchlocopt     : location option;     (* for a reservation-dependent constraint *)
                    stitchspopt      : spost option; 
                  *)
+                stitchspopt      : formula option;      (* postcondition of source: optional *)
                 stitchembroidery : formula 
               }
 
@@ -35,31 +36,31 @@ type stitch = { stitchpos        : sourcepos;
 let string_of_stitch { stitchorder      = order; 
                        stitchsource     = source;
                        (* stitchlocopt     = locopt;
-                          stitchspopt      = spopt; 
                         *)
+                       stitchspopt      = spopt; 
                        stitchembroidery = assertion 
                      } =
-  Printf.sprintf "%s %s: %s" 
+  Printf.sprintf "%s %s%s: %s" 
                  (string_of_order order) 
                  (string_of_node source)
                  (* (match locopt with
                     | None -> ""
                     | Some (loc) -> Printf.sprintf "?%s" (string_of_location loc)
                    )
-                   (match spopt with
-                    | None -> ""
-                    | Some f -> Printf.sprintf " {%s}" (string_of_spost f)
-                   )
                  *)
+                 (match spopt with
+                  | None -> ""
+                  | Some f -> Printf.sprintf " {%s}" (string_of_formula f)
+                 )
                  (string_of_formula assertion)
 
-let stitchadorn spos order source (* locopt spopt *) assertion = 
+let stitchadorn spos order source (* locopt *) spopt assertion = 
   { stitchpos        = spos; 
     stitchorder      = order; 
     stitchsource     = source; 
     (* stitchlocopt     = locopt;
-       stitchspopt      = spopt; 
      *)
+    stitchspopt      = spopt; 
     stitchembroidery = assertion 
   }
 
@@ -67,8 +68,8 @@ let pos_of_stitch       s = s.stitchpos
 let order_of_stitch     s = s.stitchorder
 let source_of_stitch    s = s.stitchsource
 (* let locopt_of_stitch    s = s.stitchlocopt
-   let spopt_of_stitch     s = s.stitchspopt
  *)
+let spopt_of_stitch     s = s.stitchspopt
 let assertion_of_stitch s = s.stitchembroidery
 
 let is_go = Order.is_go <.> order_of_stitch

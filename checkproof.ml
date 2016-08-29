@@ -455,8 +455,8 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
                        )
                 )
      in
-     (* let spopt = spopt_of_stitch stitch in
-        (* this thing is only called once: we can check the arity here *)
+     let spopt = spopt_of_stitch stitch in
+     (*  (* this thing is only called once: we can check the arity here *)
         (match post, spopt with
          | PostSingle _, Some (SpostDouble _) 
          | PostSingle _, Some (SpostRes    _) ->
@@ -467,9 +467,8 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
                     )
          | _                           -> ()
         );
-        post, spopt
       *)
-     post
+     post, spopt
   in
   
   let find_actual_ancestors memofun =
@@ -686,15 +685,16 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
             )
       in
       let order = order_of_stitch stitch in
-      let sourcepost (* , spopt *) = 
+      let sourcepost, spopt = 
         match order with
         | So -> raise (Crash (Printf.sprintf "so in knot %s" (string_of_knot knot)))
         | _  -> sourcepost_of_stitch Elaboration stitch (* Elaboration always, even with go *)
       in
-      (* let sourcepost =
-           match spopt with
-           | None                    -> sourcepost
-           | Some (SpostSimple post) ->
+      let sourcepost =
+        match spopt with
+        | None                    -> sourcepost
+        | Some spost              -> spost
+      (*   | Some (SpostSimple post) ->
                (match sourcepost with
                 | PostSingle _               -> PostSingle post
                 | PostDouble (_,loc,postres) -> PostDouble (post, loc, postres)
@@ -731,8 +731,8 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
               | _    , PostSingle post               -> post
               | true , PostDouble (_   , _, postres) -> postres
               | false, PostDouble (post, _, _      ) -> post   
-         in 
        *)
+      in 
       let query = 
         match order with
         | So -> raise (Crash (Printf.sprintf "so in knot %s" (string_of_knot knot)))
@@ -1416,7 +1416,7 @@ let checkproof_prog {p_preopt=preopt; p_givopt=givopt; p_ts=threads; p_postopt=p
            let tposts = List.map tpost threads in
            let tposts = List.map (uncurry2 pmsc_process) (numbered tposts) in
            let wrapped = List.map (uncurry2 threaded) (numbered tposts) in
-           let unwrapped = List.map Modality.writes tposts in
+           let unwrapped = List.map (Modality.writes NameSet.empty) tposts in
            let query = threaded pms_tn (_recImplies (conjoin (wrapped @ unwrapped)) progpost) in
            let stringfun () =
              Printf.sprintf "inheritance of program postcondition %s from threads' postconditions %s"
