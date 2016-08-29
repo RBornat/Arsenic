@@ -17,6 +17,8 @@ let _The = function Some x -> x | None -> raise Failed_The
 
 let _Some x = Some x;;
 
+let _SomeSome x = Some (Some x);;
+
 let bool_of_opt = function Some _ -> true | None -> false
 
 let (&~~) v g =
