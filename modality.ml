@@ -29,55 +29,123 @@ let get_coherence_vars binders =
   in
   Formula.fold (cof binders)
 
-(* an attempt to define writes(P), the assertion which can be said to be transmitted in 
-   interference by B(P) and to other threads by U(P). Idea is to stop assertions claiming
+(* an attempt to define enbar(P), the assertion which can be said to be transmitted in 
+   interference by B(P) and across threads by U(P). Idea is to stop assertions claiming
    to transmit coincidences. Inspired by 
-        writes(A since B) = writes(A) /\ writes(ouat(B))
+        enbar(A since B) = enbar(A) /\ enbar(ouat(B))
+
+   I'm not trying too hard to make it efficient. It is used once on each
+   _B and _U in Lace; it is used once on each thread postcondition in Checkproof.
+   Neither of those seem to need attention.
+   
+   It can be used repeatedly in enhat, if the relevant setting is applied. I intend
+   to memoise enhat to protect that.
  *)
 
-(* I'm not trying too hard to make this efficient. If it works I could memoise it *)
+(* in what follows, pos is a boolean: a formula occurs in a positive position.
+   Temporal formulas in negative positions -- except for sofar -- are a problem.
+ *)
+let randombool_name = "boolrand&"     (* & on the end cos it's a variable. And it mustn't start with r ... *)
 
-let indivs pfrees _P = (* produce a conjunction of quantified univariate formulae *)
-    List.map (fun v -> bindExists (NameSet.remove v pfrees) _P)
-             (NameSet.elements pfrees)
-
-let univariate f = NameSet.cardinal (NameSet.filter Name.is_anyvar (Formula.frees f)) < 2
-
-let rec writes _P =
-  let bad f = raise (Error (Printf.sprintf "%s: writes(%s) inside %s"
+let enbar binders _P =
+  let univariate binders f = 
+    NameSet.cardinal 
+      (NameSet.filter Name.is_anyvar 
+                      (NameSet.diff (Formula.frees f) binders)
+      ) < 2
+  in
+  let bad f = raise (Error (Printf.sprintf "%s: enbar(%s) inside %s"
                                                 (Sourcepos.string_of_sourcepos _P.fpos)
                                                 (string_of_formula f)
                                                 (string_of_formula _P)
                            )
                     )
   in
-  let getvars f = NameSet.filter Name.is_anyvar (Formula.frees f) in
-  let univariate ns = NameSet.cardinal ns < 2 in
-  let opt_wrs f =
+  let newrand () = _recFname (Name.new_name randombool_name) in
+  let treatment pos binders posf f =
+    if univariate binders f then Some None else 
+    if pos then posf () else 
+      _SomeSome (newrand())
+  in
+  let rec enb_opt pos binders f =
+    match f.fnode with
+    | Not nf ->
+        (match nf.fnode with
+         | Sofar (NoHook, sf) -> do_ouat pos binders sf
+         | _                  -> (optenbar (not pos) binders nf &~~ (_SomeSome <.> _recNot))
+                                 |~~ (fun () -> Some None)
+        )
+    | LogArith (f1, Implies, f2) ->
+        (optionpair_either (optenbar (not pos) binders) f1 (optenbar pos binders) f2
+         &~~ (_SomeSome <.> uncurry2 _recImplies)
+        )
+        |~~ (fun () -> Some None)
+    | LogArith (f1, Iff, f2) ->
+        (optenbar pos binders (conjoin [_recImplies f1 f2; _recImplies f2 f2]) 
+         &~~ _SomeSome
+        )
+        |~~ (fun () -> Some None)
+    | Binder (bk, n, bf) ->
+        (optenbar pos (NameSet.add n binders) bf &~~ (_SomeSome <.> _recBinder bk n)) 
+        |~~ (fun () -> Some None)
+    (* here come the temporal cases. We know we are not univariate *)
+    | Since (NoHook, f1, f2) ->
+        treatment pos binders
+          (fun _ -> _SomeSome (conjoin [enbar pos binders f1; enbar pos binders (ouat NoHook f2)]))
+          f
+    | Bfr   (NoHook, bf) ->
+        treatment pos binders
+        (fun _ -> (optenbar pos binders bf &~~ (_SomeSome <.> _recBfr NoHook))
+                  |~~ (fun () -> Some None)
+        )
+        bf
+    | Univ  (NoHook, uf) ->
+        treatment pos binders
+        (fun _ -> (optenbar pos binders uf &~~ (_SomeSome <.> _recUniv NoHook))
+                  |~~ (fun () -> Some None)
+        )
+        uf
+    | Sofar (NoHook, sf) ->
+        if not pos then do_ouat pos binders sf else
+        treatment pos binders 
+        (fun _ ->
+           match Formula.deconjoin sf with
+           | Some fs -> _SomeSome (enbar pos binders (conjoin (List.map (sofar NoHook) fs)))
+           | None    -> _SomeSome (enbar pos binders sf)
+        )
+        sf
+    (* no hooking, please *)
+    | Since (Hook, _, _) 
+    | Bfr   (Hook, _) 
+    | Univ  (Hook, _) 
+    | Sofar (Hook, _) -> bad f
+    (* otherwise *)
+    | _               -> None
+    (*
     match extract_shorthand f with
     | Some (Ouat(NoHook,nf)) ->
         let vs = getvars nf in
         if univariate vs then Some f else
           (match nf.fnode with
            | LogArith (f1,And,f2) ->
-               Some (conjoin [ouat NoHook (writes f1); ouat NoHook (writes f2)])
+               Some (conjoin [ouat NoHook (enbar binders f1); ouat NoHook (enbar binders f2)])
            | _                    -> Some (conjoin (List.map (ouat NoHook) (indivs vs nf)))
           )
     | Some (Ouat _)          -> bad f
     | _                      ->
        match f.fnode with
-       | Since (NoHook, af, bf) -> Some (conjoin [writes af; writes (ouat NoHook bf)])
+       | Since (NoHook, af, bf) -> Some (conjoin [enbar binders af; enbar binders (ouat NoHook bf)])
        | Sofar (NoHook, sf)     -> 
            let vs = getvars sf in 
            if univariate vs then Some f
            else
              (match sf.fnode with 
               | LogArith (f1,And,f2) ->
-                  Some (conjoin [sofar NoHook (writes f1); sofar NoHook (writes f2)])
+                  Some (conjoin [sofar NoHook (enbar binders f1); sofar NoHook (enbar binders f2)])
               | _                    -> Some sf (* I think it's as simple as that *)
              )
-       | Bfr  (NoHook, mf) 
-       | Univ (NoHook, mf) -> Some (writes mf)
+       | Bfr  (NoHook, bf) -> optenbar binders bf &~~ (_Some <.> _recBfr NoHook)
+       | Univ (NoHook, uf) -> optenbar binders uf &~~ (_Some <.> _recUniv NoHook)
        (* we don't want these bad forms of temporality *)
        | Since _
        | Sofar _
@@ -85,8 +153,16 @@ let rec writes _P =
        | Univ  _ -> bad f
        (* otherwise look at its parts, please *)
        | _       -> if univariate (getvars f) then Some f else None
+       *)
+  and do_ouat pos binders sf =
+    if univariate binders sf then Some None else
+    match Formula.dedisjoin sf with
+    | Some fs -> _SomeSome (enbar pos binders (disjoin (List.map (sofar NoHook) fs)))
+    | None    -> _SomeSome (newrand ())
+  and optenbar pos binders f = Formula.optmap (enb_opt pos binders) f
+  and enbar pos binders = (optenbar pos binders ||~ id)
   in
-  Formula.map opt_wrs _P
+  Formula.map (enb_opt true binders) _P
   
 (* we currently have two temporal modalities: B and Univ. They are handled as temporal assertions:
    B(P) means there was a time at which there was a barrier event, since which P held locally; 
@@ -163,11 +239,11 @@ let rec simplify f =
   let optsimp f = match f.fnode with
     | Univ (hk,uf) -> 
         (match uf.fnode with
-         | Univ  (_,uf')     -> Some (simplify (universal hk uf'))
-         | Bfr   (_,bf)      -> Some (simplify (universal hk bf))
-         | Fandw   (_,ef)    -> Some (simplify (universal hk ef))
+         | Univ  (_,uf')     -> Some (Some (simplify (universal hk uf')))
+         | Bfr   (_,bf)      -> Some (Some (simplify (universal hk bf )))
+         | Fandw   (_,ef)    -> Some (Some (simplify (universal hk ef )))
          | Since (_,p,q)     -> 
-             Some (simplify (conjoin [universal hk (conjoin [p; ouat hk q]); since hk p q])) 
+             Some (Some (simplify (conjoin [universal hk (conjoin [p; ouat hk q]); since hk p q]))) 
          (* | Sofar (_,sf)    -> 
              let indivs = individualise sf in
              let history = conjoin (sf :: List.map (sofar None hk) indivs) in
@@ -187,9 +263,9 @@ let rec simplify f =
                              events, which is a reasonable abstraction. Aligning them properly with
                              the 'new' treatment would be a bit scary. I might attempt it one day.
                            *)
-                          Some (simplify (since hk (simplify (fandw NoHook uf)) barrier_event_formula))
+                          Some (Some (simplify (since hk (simplify (fandw NoHook uf)) barrier_event_formula)))
                           (* the 'new way
-                             Some (fandw hk (simplify (since NoHook uf barrier_event_formula)))
+                             Some (Some (fandw hk (simplify (since NoHook uf barrier_event_formula))))
                            *)
                        )
             (* ) *)
@@ -200,14 +276,14 @@ let rec simplify f =
          *)
         pushlogical (_recBfr hk) bf 
         |~~ (fun () ->
-                Some (simplify (since hk bf barrier_event_formula))
+                Some (Some (simplify (since hk bf barrier_event_formula)))
              )
     | Since (hk,f1,f2) ->
         let f1 = simplify f1 in
         let f2 = simplify f2 in
         (match f1.fnode with
-         | Since (_,sf1,sf2) -> Some (simplify (since hk sf1 (conjoin [f1;f2])))
-         | Sofar (_,sf)      -> Some (simplify (conjoin [sofar hk sf; ouat hk f2])) 
+         | Since (_,sf1,sf2) -> Some (Some (simplify (since hk sf1 (conjoin [f1;f2]))))
+         | Sofar (_,sf)      -> Some (Some (simplify (conjoin [sofar hk sf; ouat hk f2]))) 
          | _                 -> None
         )
     | _ -> None
@@ -482,7 +558,7 @@ let embed bcxt cxt orig_f =
               )
           )
         in
-        Some (cxt, Some (conjoin [extra_f1; since_assert]))
+        Some (cxt, Some (conjoin [(* extra_f1; *) since_assert]))
     | Sofar (hk, sf) ->
         let do_sofar cxt tidopt extra_sf =
           (* same as since, except from the beginning of time *)
