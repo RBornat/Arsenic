@@ -189,8 +189,12 @@ let history_function_name = "&hf"
 let history_index_name = "&hi"
 let barrier_event_name = "bev&"     (* & on the end cos it's a variable *)
 let tid_name = "&tid"
+let hat_hi_name = "&hat"
+let dhat_hi_name = "&hathat"
 
 let barrier_event_formula = _recFname barrier_event_name
+let hat_hi_formula = _recFname hat_hi_name
+let dhat_hi_formula = _recFname dhat_hi_name
 
 let rec axstring_of_type t = 
   match t with
@@ -387,9 +391,19 @@ type situation =
   | InU of formula
   | InSofar of formula
 
+(* hats and tildes don't occur in same query *)
+
 let tn_of_hat = function 
   | Hat  | Tilde  -> 1
   | DHat | DTilde -> 2
+
+let hi_of_hat = function 
+  | Hat  | Tilde  -> hat_hi_formula
+  | DHat | DTilde -> dhat_hi_formula
+
+let hat_hi_asserts = 
+  let zero = _recFint_of_int 0 in
+  [ _recLess hat_hi_formula zero; _recLess dhat_hi_formula zero ]
 
 let embed bcxt cxt orig_f = 
   
@@ -405,8 +419,7 @@ let embed bcxt cxt orig_f =
       match ht with 
       | None      -> _recFint (string_of_int tn) 
       (* tildes and hats don't occur in the same query *)
-      | Some Hat  | Some Tilde  -> _recFint (string_of_int ((tn+1) mod !Thread.threadcount)) (* and should be state -1, really *)
-      | Some DHat | Some DTilde -> _recFint (string_of_int ((tn+2) mod !Thread.threadcount)) (* and should be state -1, really *)
+      | Some hat  -> _recFint_of_int (tn_of_hat hat)
       (* | There, false -> _recFint (string_of_int (-1)) (* specially for Latest *) *)
     in
     let formula_of_hat ht = 
@@ -450,11 +463,9 @@ let embed bcxt cxt orig_f =
       let tidf, epf = 
       match tn, ht, hk with
       | 0, Some ht, NoHook ->
-          _recFint_of_int (tn_of_hat ht),
-          _recFint_of_int (-1) (* for now *)
+          _recFint_of_int (tn_of_hat ht), hi_of_hat ht
       | _                  ->
-          formula_of_hat ht,
-          hiformula_of_ep hk
+          formula_of_hat ht, hiformula_of_ep hk
       in
       let vtype = if v=barrier_event_name then Bool else bcxt <@@> f in
       embedvariable cxt tidf epf v vtype

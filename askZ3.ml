@@ -249,9 +249,14 @@ let z3check_query question task noisy assertions query =
               is the barrier event.
             *)
            let assertions = 
-              if List.exists (Formula.exists (fun f -> is_recU f || is_recBfr f)) 
-                             (query::assertions)
+              if List.exists (Formula.exists (is_recU <||> is_recBfr)) (query::assertions)
               then (Modality.ur_event ())::assertions 
+              else assertions
+           in
+           (* and say that hatted stuff is from the past *)
+           let assertions = 
+              if List.exists (Formula.exists is_hatted) (query::assertions)
+              then Modality.hat_hi_asserts@assertions 
               else assertions
            in
            (* add _cv assertions for coherence variables, not(_cv ..) for the others *)
