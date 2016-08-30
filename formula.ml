@@ -1167,12 +1167,12 @@ let is_hatted f = (* maybe this needs to look inside modalities ... *)
 let is_hooked f =
   match f.fnode with
   | Fvar      (_, Hook, _) 
-  | Since        (Hook, _, _)        
-  | Bfr          (Hook, _)                  
-  | Sofar        (Hook, _)    
-  (* | Latest       (Hook, _) *)
-                               -> true
-  | _                          -> false
+  | Since     (Hook, _, _)        
+  | Bfr       (Hook, _)                  
+  | Sofar     (Hook, _)    
+  (* | Latest    (Hook, _) *)
+                            -> true
+  | _                       -> false
 
 (* *********************** free names ******************************* *)
 
