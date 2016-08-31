@@ -92,21 +92,27 @@ let check_query prefix query =
       | Qsat f               -> Printf.printf "\n%s\n" (show_sat (satZ3 f assertions))
       | Qstableformula (p,i) ->
           let scq = Stability.sc_stable_query_intfdesc p i in
-          Printf.printf "\nsc stability\n%s\n" (show_query assertions scq);
+          Printf.printf "\nSC/INT stability\n%s\n" (show_query assertions scq);
           tautZ3 scq assertions;
           let extq = Stability.ext_stable_query_intfdesc p i in
-          Printf.printf "\next stability\n%s\n" (show_query assertions extq);
+          Printf.printf "\nEXT stability\n%s\n" (show_query assertions extq);
           tautZ3 extq assertions;
           let uextq = Stability.uext_stable_query_intfdesc p i in
-          Printf.printf "\nuext stability\n%s\n" (show_query assertions uextq);
+          Printf.printf "\nUEXT stability\n%s\n" (show_query assertions uextq);
           tautZ3 uextq assertions
       | Qstableintf (i1,i2)  -> 
           let boq = Stability.bo_stable_query_intfdescs i1 i2 in
-          Printf.printf "\nbo stability 1 against 2\n%s\n" (show_query assertions boq);
+          Printf.printf "\nBO stability 1 against 2\n%s\n" (show_query assertions boq);
           tautZ3 boq assertions;
           let boq = Stability.bo_stable_query_intfdescs i2 i1 in
-          Printf.printf "\nbo stability 2 against 1\n%s\n" (show_query assertions boq);
-          tautZ3 boq assertions
+          Printf.printf "\nBO stability 2 against 1\n%s\n" (show_query assertions boq);
+          tautZ3 boq assertions;
+          let uoq = Stability.uo_stable_query_intfdescs i1 i2 in
+          Printf.printf "\nUO stability 1 against 2\n%s\n" (show_query assertions uoq);
+          tautZ3 uoq assertions;
+          let uoq = Stability.uo_stable_query_intfdescs i2 i1 in
+          Printf.printf "\nUO stability 2 against 1\n%s\n" (show_query assertions uoq);
+          tautZ3 uoq assertions
       | Qspimplies  (p,assign,q) -> 
           let sp = Strongestpost.strongest_post true p assign in
           let spq = _recImplies sp q in
