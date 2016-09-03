@@ -13,30 +13,9 @@ open Assign
    https://opensource.org/licenses/MIT
  *)
  
-(* ******************** strongest-post substitution *************************
-        
-    Takes an assoc list mapping, from names to formulas. 
-    
-    Bfr, Univ, Sofar: 
-    
-        If P[mapping]=P then (M P)[mapping] = M P;
-    
-        (M P)[regmapping] = M (P[regmapping]);
-     
-        (B P)[varmapping] = (-)B(P)/\P[varmapping]; 
-        (U P)[varmapping] = (-)U(P)/\P[varmapping]/\hat(P); 
-        (S P)[varmapping] = (-)S(P)/\P[varmapping]; 
-      
-    Since:
-      
-      If P[mapping]=P and Q[mapping]=Q then (P since Q)[mapping] = P since Q
-      
-      (P since Q)[regmapping] = P[regmapping] since Q[regmapping]
-      
-      (P since Q)[varmapping = (-)(P since Q) /\ P[varmapping]
-      
-   ************************************************************************** *)
- 
+(* ******************** hatting *************************
+   ****************************************************** *)
+   
 let enhat hatting orig_f =
   let rec opt_hat binders f =
     match f.fnode with
@@ -51,7 +30,8 @@ let enhat hatting orig_f =
                                       then _SomeSome (_recLatest There NoHook v)
                                       else Some None (* don't touch it! *)
      *)
-    | Sofar (NoHook,sf)       -> ohat binders sf &~~ (_SomeSome <.> _recSofar NoHook)
+    | Sofar (NoHook,sf)       -> _SomeSome (conjoin [f; hat binders sf])      (* because Sofar(P)=>P *)
+    | Ouat  (NoHook,sf)       -> ohat binders sf &~~ (_SomeSome <.> _recOuat NoHook) (* Ouat is local *)
     | Since (NoHook,f1,f2)    -> optionpair_either (ohat binders) f1 (ohat binders) f2
                                  &~~ (_SomeSome <.> uncurry2 (_recSince NoHook)) 
     (* we hat even inside binders. Oh yes. *) 
@@ -61,7 +41,8 @@ let enhat hatting orig_f =
     | Fvar    _           
     | Bfr     _           
     | Univ    _        
-    (* | Latest  _  *)      
+    | Sofar   _
+    | Ouat    _
     | Since   _               -> raise (Invalid_argument (Printf.sprintf "Strongestpost.enhat.opt_hat %s in %s %s" 
                                                                          (string_of_formula f)
                                                                          (string_of_hatting hatting)
@@ -74,6 +55,31 @@ let enhat hatting orig_f =
   in
   hat NameSet.empty orig_f
 
+(* ******************** strongest-post substitution *************************
+        
+    Takes an assoc list mapping, from names to formulas. 
+    
+    Bfr, Univ, Sofar, Ouat: 
+    
+        If P[mapping]=P then (M P)[mapping] = M P;
+    
+        (M P)[regmapping] = M (P[regmapping]);
+     
+        (_B P)[varmapping] = (-)_B(P)/\P[varmapping]; 
+        (_U P)[varmapping] = (-)_U(P)/\P[varmapping]; 
+        (_S P)[varmapping] = (-)_S(P)/\P[varmapping]; 
+        (_O P)[varmapping] = (-)_O(P)\/P[varmapping];  -- or, not and
+      
+    Since:
+      
+      If P[mapping]=P and Q[mapping]=Q then (P since Q)[mapping] = P since Q
+      
+      (P since Q)[regmapping] = P[regmapping] since Q[regmapping]
+      
+      (P since Q)[varmapping = (-)(P since Q) /\ P[varmapping]
+      
+   ************************************************************************** *)
+ 
 let optsp_substitute mapping orig_f =
   let isvarmapping mapping f = 
     if List.for_all (Name.is_anyvar <.> fstof2) mapping then true
@@ -86,11 +92,11 @@ let optsp_substitute mapping orig_f =
               ", which contains " ^ string_of_formula f))
   in
   let rec optsub mapping f = 
-    let domodality mm mf =
+    let domodality mm condis mf =
       (subopt mapping 
        &~ (fun mf' -> 
              if isvarmapping mapping f 
-             then _SomeSome (conjoin [mm Hook mf; mf'])
+             then _SomeSome (condis [mm Hook mf; mf'])
              else _SomeSome (mm NoHook mf')
           )
       ) mf
@@ -103,13 +109,14 @@ let optsp_substitute mapping orig_f =
     | Fvar     (_,NoHook,v)   -> None (* Formula.optmap leaves it alone *)
     | Binder (bk,n,bf)        -> (subopt (List.remove_assoc n mapping) &~ (_SomeSome <.> _recBinder bk n)) bf 
                                  |~~ (fun () -> Some None) (* don't touch it! *)
-    | Bfr (NoHook,bf)         -> domodality _recBfr bf
-    | Univ (NoHook,uf)        -> domodality _recUniv uf
+    | Bfr (NoHook,bf)         -> domodality _recBfr conjoin bf
+    | Univ (NoHook,uf)        -> domodality _recUniv conjoin uf
     (* | Latest (pl,NoHook,v)       -> if List.mem_assoc v mapping 
                                        then _SomeSome (_recLatest pl Hook v)
                                        else Some None
      *)
-    | Sofar (NoHook, sf)      -> domodality _recSofar sf
+    | Sofar (NoHook, sf)      -> domodality _recSofar conjoin sf
+    | Ouat  (NoHook, sf)      -> domodality _recOuat disjoin sf
     | Since (NoHook,f1,f2)  -> (if isvarmapping mapping f 
                                 then (* x\xhook affects only f1 *)
                                   subopt mapping f1 
@@ -124,6 +131,7 @@ let optsp_substitute mapping orig_f =
     | Univ      _            
     (* | Latest    _  *)          
     | Sofar     _             
+    | Ouat      _             
     | Since     _           -> raise (Invalid_argument (Printf.sprintf "sp_substitute [%s] %s, which contains %s" 
                                                                        (string_of_assoc string_of_name string_of_formula "->" ";" mapping)
                                                                        (string_of_formula orig_f) 
@@ -167,6 +175,7 @@ let strongest_post with_result pre assign =
             | Bfr      (_,bf) -> Some (vsof fvs bf)
             | Univ     (_,uf) -> Some (vsof fvs uf)
             | Sofar    (_,sf) -> Some (vsof fvs sf)
+            | Ouat     (_,sf) -> Some (vsof fvs sf)
             | Since (_,f1,f2) -> Some (vsof (vsof fvs f1) f2)
             | Binder  (_,n,f) -> let bvs = vsof NameSet.empty f in
                                     Some (NameSet.union fvs (NameSet.remove n bvs))

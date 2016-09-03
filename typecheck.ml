@@ -154,7 +154,8 @@ let rec typeassign_formula cxt bcxt t f =
                  Bool Bool f' in
          List.remove_assoc s cxt,       (* remove the outermost one *)
          bcxt 
-     | Sofar            (_,f) -> unary cxt bcxt Bool Bool f
+     | Sofar            (_,f) 
+     | Ouat             (_,f) -> unary cxt bcxt Bool Bool f
      | Since        (_,f1,f2) -> binary cxt bcxt Bool Bool Bool f1 f2
      | Ite         (cf,tf,ef) -> ternary cxt bcxt t Bool t t cf tf ef
      | Cohere (v,f1,f2)       -> let cxt = unifytype cxt t Bool in

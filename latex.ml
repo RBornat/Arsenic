@@ -210,29 +210,27 @@ let rec latex_of_primary f =
   let latex_of_app name args =
     Printf.sprintf "%s(%s)" name args
   in
-  match extract_shorthand f with
-  | Some (Ouat(_,f)) -> sname m.ouat_token ^ bracketed_latex_of_formula f
-  | _                ->
-      match f.fnode with
-      | Fint   i             -> i
-      | Fbool  b             -> latex_of_bool b
-      | Freg   r             -> latex_of_reg r
-      | Fvar   (_,_,v)       -> latex_of_var v
-      | Flogc  n             -> latex_of_logc n
-      | Negarith f'          -> "-" ^ latex_of_primary f'
-      | Not    f'            -> "!" ^ latex_of_primary f'
-      | Ite (cf,tf,ef)       -> sname "if"     ^ " " ^ latex_of_formula cf
-                                ^ " " ^ sname "then" ^ " " ^ latex_of_formula tf
-                                ^ " " ^ sname "else" ^ " " ^ latex_of_formula ef
-                                ^ " " ^ sname "fi"
-      | Bfr (_,f)          -> latex_of_app (sname "Bfr")     (latex_of_formula f)
-      | Univ   (_,f)         -> latex_of_app (sname "U")       (latex_of_formula f)
-      | Fandw    (_,f)         -> latex_of_app (sname "Fandw")     (latex_of_formula f)
-      | Sofar (_,f)        -> latex_of_app (sname "sofar")   (latex_of_formula f)
-      | App (n,fs)           -> latex_of_app (latex_of_name n) (latex_of_args fs)
-      | Cohere (v,f1,f2)     -> latex_of_app (latex_of_var v ^"_{c}") (latex_of_args [f1;f2])
-      (* | Latest _             -> raise (Error "latest not supported. Sorry") (*latex_of_app (sname "latest") (latex_of_var v)*) *)
-      | _                    -> bracketed_latex_of_formula f
+    match f.fnode with
+    | Fint   i             -> i
+    | Fbool  b             -> latex_of_bool b
+    | Freg   r             -> latex_of_reg r
+    | Fvar   (_,_,v)       -> latex_of_var v
+    | Flogc  n             -> latex_of_logc n
+    | Negarith f'          -> "-" ^ latex_of_primary f'
+    | Not    f'            -> "!" ^ latex_of_primary f'
+    | Ite (cf,tf,ef)       -> sname "if"     ^ " " ^ latex_of_formula cf
+                              ^ " " ^ sname "then" ^ " " ^ latex_of_formula tf
+                              ^ " " ^ sname "else" ^ " " ^ latex_of_formula ef
+                              ^ " " ^ sname "fi"
+    | Bfr (_,f)          -> latex_of_app (sname "Bfr")     (latex_of_formula f)
+    | Univ   (_,f)         -> latex_of_app (sname "U")       (latex_of_formula f)
+    | Fandw    (_,f)         -> latex_of_app (sname "Fandw")     (latex_of_formula f)
+    | Sofar (_,f)        -> latex_of_app (sname "sofar")   (latex_of_formula f)
+    | Ouat  (_,f)        -> latex_of_app (sname "ouat")   (latex_of_formula f)
+    | App (n,fs)           -> latex_of_app (latex_of_name n) (latex_of_args fs)
+    | Cohere (v,f1,f2)     -> latex_of_app (latex_of_var v ^"_{c}") (latex_of_args [f1;f2])
+    (* | Latest _             -> raise (Error "latest not supported. Sorry") (*latex_of_app (sname "latest") (latex_of_var v)*) *)
+    | _                    -> bracketed_latex_of_formula f
 
 and bracketed_latex_of_formula f = Printf.sprintf "(%s)" (latex_of_formula f)
 
@@ -256,6 +254,7 @@ and latex_of_formula f =
   | Not          _
   | Ite          _
   | Sofar        _ 
+  | Ouat         _ 
   | Cohere       _             
   | App          _  
   | Bfr          _              

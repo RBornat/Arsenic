@@ -446,7 +446,7 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
                             )
                      )
           )
-      | CidInit (_,f)    -> (* PostSingle *) (sofar NoHook (universal NoHook f))
+      | CidInit (_,f)    -> (* PostSingle *) (sofar NoHook f) (* used to have (universal NoHook f) *)
       | CidThreadPost _  
       | CidFinal      _  -> 
           raise (Crash (Printf.sprintf "%s: stitch %s refers to thread/program postcondition"
