@@ -1,4 +1,6 @@
-# checking UO stability, really. First test should fail uo.
-(_U(m=0)/\f=0)\/m=1 _against  m=0 | m:=1;
-(_U(m=0)/\f=0)\/m=1 _against  m=1 | f:=1;
-_sp((_U(m=0)/\f=0)\/m=1; r1:=f) => r1=1 => m=1;
+# investigating what sofar does
+sofar(f=0) => f=1 => m=1;
+# checking UO/UEXT stability. First test should fail UEXT.
+sofar(m=0)/\f=0\/m=1 _against  m=0 | m:=1;
+sofar(m=0)/\f=0\/m=1 _against  m=1 | f:=1;
+_sp(sofar(m=0)/\f=0\/m=1; r1:=f) => r1=1 => m=1;
