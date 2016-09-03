@@ -390,7 +390,7 @@
     | Univ  (NoHook,uf)      -> no_hats pl {f with fnode=Univ(wh,uf)}
     | _                      -> (match pl,wh with
                                  | None, NoHook -> f
-                                 | _            -> wrong (string_of_pl pl ^ string_of_wh wh)
+                                 | _            -> wrong (string_of_pl pl ^ string_of_hk wh)
                                 )
       
   let check_knot knot =
