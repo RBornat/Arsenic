@@ -74,7 +74,6 @@ simpletest:
 	./Test proofs/MP_dountil_locd.proof
 	./Test proofs/MP_while.proof
 	./Test proofs/LB.proof
-	./Test proofs/LB.proof -error 7 "EXT stability" -error 14 "EXT stability"
 	./Test -SCreg true proofs/SCreg.proof
 	./Test -SCreg false proofs/SCreg.proof -error 6 lo-parallel
 	./Test -SCreg true proofs/nothinair.proof
@@ -87,8 +86,8 @@ simpletest:
 	./Test proofs/IRIW.proof
 	./Test proofs/UEXT.unproof -error 7 "UEXT stability"
 	./Test proofs/uo-unstable-interference.unproof -error 4 "self-uo stability"
-	./Test -SCloc false proofs/LBwithoutSCloc.proof
-	./Test proofs/tokenringsingleassert.proof
+#	./Test -SCloc false proofs/LBwithoutSCloc.proof
+#	./Test proofs/tokenringsingleassert.proof
 	./Test proofs/tokenringsingleifthen.proof
 	./Test proofs/tokenringsingleifthenaux.proof
 	./Test proofs/tokenring3assert.proof
