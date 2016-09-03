@@ -531,7 +531,7 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
     else
       (let extq = Stability.ext_stable_query_intfdesc assertion intfdesc in
        check_taut spos (stringfun "EXT stability") extq;
-       if not (Formula.exists (is_recU (* <||> is_recLatest *)) assertion) then
+       if not (Formula.exists (is_recU <||> is_recSofar (* <||> is_recLatest *)) assertion) then
          avoided spos "Z3 check" (stringfun "UEXT stability")
        else
          (let uextq = Stability.uext_stable_query_intfdesc assertion intfdesc in
@@ -1140,9 +1140,9 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
         else
           (let boq = bo_stable_query xid.irec yid.irec in
            check_taut xid.ipos (stringfun Bo) boq;
-           if not (Formula.exists (is_recU (* <||> is_recLatest *)) (Intfdesc.pre xid))
+           if not (Formula.exists (is_recU <||> is_recSofar (* <||> is_recLatest *)) (Intfdesc.pre xid))
            then 
-             avoided xid.ipos (* "(no U or latest) uo stability check" *) "(no U) uo stability check" (stringfun Uo)
+             avoided xid.ipos (* "(no U or latest) uo stability check" *) "(no U or sofar) uo stability check" (stringfun Uo)
            else
              (let uoq = uo_stable_query xid.irec yid.irec in
               check_taut xid.ipos (stringfun Uo) uoq
@@ -1254,7 +1254,7 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
             check_boparallel affected vassigns ct;
             let check_uo cintf = 
               let uo_needed apre assigned = 
-                Formula.exists ((is_recU (* <||> is_recLatest *)) <&&> (fun f -> affected f assigned)) apre
+                Formula.exists ((is_recU <||> is_recSofar (* <||> is_recLatest *)) <&&> (fun f -> affected f assigned)) apre
               in
               check_uoparallel uo_needed vassigns ct; (* if repeated, memoisation will save us *)
               (* self-uo stability *)
