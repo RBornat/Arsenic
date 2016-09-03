@@ -43,7 +43,7 @@ let get_coherence_vars binders =
  *)
 
 (* in what follows, pos is a boolean: a formula occurs in a positive position.
-   Temporal formulas in negative positions -- except for sofar -- are a problem.
+   Temporal formulas in negative positions -- except perhaps sofar -- are a problem.
  *)
 let randombool_name = "boolrand&"     (* & on the end cos it's a variable. And it mustn't start with r ... *)
 
@@ -70,114 +70,139 @@ let enbar binders _P =
   let rec enb_opt pos binders f =
     match f.fnode with
     | Not nf ->
-        (match nf.fnode with
-         | Sofar (NoHook, sf) -> do_ouat pos binders sf
-         | _                  -> (optenbar (not pos) binders nf &~~ (_SomeSome <.> _recNot))
-                                 |~~ (fun () -> Some None)
-        )
+        (optbar (not pos) binders nf &~~ (_SomeSome <.> _recNot))
+        |~~ (fun () -> Some None)
     | LogArith (f1, Implies, f2) ->
-        (optionpair_either (optenbar (not pos) binders) f1 (optenbar pos binders) f2
+        (optionpair_either (optbar (not pos) binders) f1 (optbar pos binders) f2
          &~~ (_SomeSome <.> uncurry2 _recImplies)
         )
         |~~ (fun () -> Some None)
     | LogArith (f1, Iff, f2) ->
-        (optenbar pos binders (conjoin [_recImplies f1 f2; _recImplies f2 f2]) 
+        (optbar pos binders (conjoin [_recImplies f1 f2; _recImplies f2 f2]) 
          &~~ _SomeSome
         )
         |~~ (fun () -> Some None)
     | Binder (bk, n, bf) ->
-        (optenbar pos (NameSet.add n binders) bf &~~ (_SomeSome <.> _recBinder bk n)) 
+        (optbar pos (NameSet.add n binders) bf &~~ (_SomeSome <.> _recBinder bk n)) 
         |~~ (fun () -> Some None)
     (* here come the temporal cases. We know we are not univariate *)
     | Since (NoHook, f1, f2) ->
         treatment pos binders
-          (fun _ -> _SomeSome (conjoin [enbar pos binders f1; enbar pos binders (ouat NoHook f2)]))
+          (fun _ -> _SomeSome (conjoin [bar pos binders f1; bar pos binders (ouat NoHook f2)]))
           f
     | Bfr   (NoHook, bf) ->
         treatment pos binders
-        (fun _ -> (optenbar pos binders bf &~~ (_SomeSome <.> _recBfr NoHook))
+        (fun _ -> (optbar pos binders bf &~~ (_SomeSome <.> _recBfr NoHook))
                   |~~ (fun () -> Some None)
         )
         bf
     | Univ  (NoHook, uf) ->
         treatment pos binders
-        (fun _ -> (optenbar pos binders uf &~~ (_SomeSome <.> _recUniv NoHook))
+        (fun _ -> (optbar pos binders uf &~~ (_SomeSome <.> _recUniv NoHook))
                   |~~ (fun () -> Some None)
         )
         uf
     | Sofar (NoHook, sf) ->
-        if not pos then do_ouat pos binders sf else
         treatment pos binders 
         (fun _ ->
            match Formula.deconjoin sf with
-           | Some fs -> _SomeSome (enbar pos binders (conjoin (List.map (sofar NoHook) fs)))
-           | None    -> _SomeSome (enbar pos binders sf)
+           | Some fs -> _SomeSome (bar pos binders (conjoin (List.map (sofar NoHook) fs)))
+           | None    -> _SomeSome (bar pos binders sf)
+        )
+        sf
+    | Ouat  (NoHook, sf) ->
+        treatment pos binders 
+        (fun _ ->
+           match Formula.deconjoin sf with
+           | Some fs -> _SomeSome (bar pos binders (conjoin (List.map (ouat NoHook) fs)))
+           | None    -> _SomeSome (newrand ())
         )
         sf
     (* no hooking, please *)
     | Since (Hook, _, _) 
     | Bfr   (Hook, _) 
     | Univ  (Hook, _) 
-    | Sofar (Hook, _) -> bad f
+    | Sofar (Hook, _)  
+    | Ouat  (Hook, _) -> bad f
     (* otherwise *)
     | _               -> None
-    (*
-    match extract_shorthand f with
-    | Some (Ouat(NoHook,nf)) ->
-        let vs = getvars nf in
-        if univariate vs then Some f else
-          (match nf.fnode with
-           | LogArith (f1,And,f2) ->
-               Some (conjoin [ouat NoHook (enbar binders f1); ouat NoHook (enbar binders f2)])
-           | _                    -> Some (conjoin (List.map (ouat NoHook) (indivs vs nf)))
-          )
-    | Some (Ouat _)          -> bad f
-    | _                      ->
-       match f.fnode with
-       | Since (NoHook, af, bf) -> Some (conjoin [enbar binders af; enbar binders (ouat NoHook bf)])
-       | Sofar (NoHook, sf)     -> 
-           let vs = getvars sf in 
-           if univariate vs then Some f
-           else
-             (match sf.fnode with 
-              | LogArith (f1,And,f2) ->
-                  Some (conjoin [sofar NoHook (enbar binders f1); sofar NoHook (enbar binders f2)])
-              | _                    -> Some sf (* I think it's as simple as that *)
-             )
-       | Bfr  (NoHook, bf) -> optenbar binders bf &~~ (_Some <.> _recBfr NoHook)
-       | Univ (NoHook, uf) -> optenbar binders uf &~~ (_Some <.> _recUniv NoHook)
-       (* we don't want these bad forms of temporality *)
-       | Since _
-       | Sofar _
-       | Bfr   _
-       | Univ  _ -> bad f
-       (* otherwise look at its parts, please *)
-       | _       -> if univariate (getvars f) then Some f else None
-       *)
-  and do_ouat pos binders sf =
-    if univariate binders sf then Some None else
-    match Formula.dedisjoin sf with
-    | Some fs -> _SomeSome (enbar pos binders (disjoin (List.map (sofar NoHook) fs)))
-    | None    -> _SomeSome (newrand ())
-  and optenbar pos binders f = Formula.optmap (enb_opt pos binders) f
-  and enbar pos binders = (optenbar pos binders ||~ id)
+  and optbar pos binders f = Formula.optmap (enb_opt pos binders) f
+  and bar pos binders = (optbar pos binders ||~ id)
   in
   Formula.map (enb_opt true binders) _P
   
-(* we currently have two temporal modalities: B and Univ. They are handled as temporal assertions:
-   B(P) means there was a time at which there was a barrier event, since which P held locally; 
-   Univ(P) means the same thing but across all threads.
+(* ******************************** how it works ******************************** 
+
+   We suppose a number of threads 0..tc and a number of states -infinity..(0 or 1).
+   
+   In a stability query, with hatting and/or hooking, the initial thread number is 0
+   and the thread count is 3, if there is double hatting, or 2 otherwise.
+   
+   In a query with explicit thread numbering the thread count is the maximum thread number
+   and (because of the way we construct the queries) the initial thread number is irrelevant.
+   Thread numbers never appear in a stability query.
+   
+   In queries without hatting, hooking or thread numbering the thread count and thread
+   number are each 1.
+   
+   There's a 'now' function (see nowf) which takes a thread id and delivers either
+   0 or 1. In a stability query, with hatting and/or hooking, it is 
+        -- nowf tid = if tid=0 then 1 else 0 fi
+   That is, there is an extra state in thread 0, the new state instantaneously generated
+   by an assignment. hooked_now is 0, the state before the assignment.
+   
+   In a non-stability query, without hatting or hooking, 
+        -- nowf tid = 0
+   That is, a sort of array of threads * states. 
+   
+   In a stability query, or a query without hatting or hooking and without explicit 
+   thread numbering, . 
+   
+   Variable references are embedded as a function from variable name thread number and 
+   state number. There is a function for each possible type of variable name (int, bool, 
+   tuple of ...)
+        -- x     (plain x)         is v_tx(x,tid,nowf tid)
+        -- (-)x  (hooked x)        is v_tx(x,tid,0)
+        -- (^)x  (hatted x)        is v_tx(x,1,hat_state)
+        -- (^^)x (double-hatted x) is v_tx(x,2,dhat_state)
+        -- (~)x  (tilde x)         is v_tx(x,1,hat_state)
+        -- (~~)x (double-tilde x)  is v_tx(x,2,dhat_state)
+   Note that tilde and hat never occur in the same query. hat_state and dhat_state are 
+   defined to be some value less than 0 (i.e. they are some time in the past, notionally
+   before the pre-interference state). Note that hatted (etc.) occurrences are treated 
+   as in another thread.
+   
+   Sofar(P) is P everywhere, since the beginning of time 
+        -- forall t (forall hi (hi<nowf t -> P^hi))@t)
+        -- hooked Sofar replaces nowf t by 0, the Sofar state before the assignment.
+   Note that Sofar(x=0)=>(^x)=0 (and (^^)x=0 and so on). 
+   Hooked Sofar replaces nowf t by 0.
+   
+   Ouat(P) is at one point in the current thread P -- exists hi (hi<nowf 0 -> P^hi). Note
+   that Ouat((^x)=0) is kind of ok.
+   Hooked Ouat replaces nowf 0 by 0. 
+   
    P since Q means there was a time at which P/\Q and since then P.
-   P since Q is exists hi (Q@hi /\ forall hi' (hi<=hi'<=0 => P@hi'))
-   B(P) is P since bev
-   We don't need to count threads: there is just None and There, two 'places'. None is
-   the current place; There is at least partly outside it.
-   Univ(P) is forall threads (P since bev).
-   B(true) and Univ(true) are just true, so we need a bev at the beginning of time, in all timecones.
-   Hatting (see stability rules and strongestpost.ml) puts variables, B and Sofar into There.
-   Strongest-post substitution affects variables, modalities and 'since', changing NoHook into Hook.
-   A variable will never be There and Hook; B and Sofar may be.
- *)
+        -- exists hi (Q^hi /\ forall hi' (hi<=hi'<=nowf tid => P^hi'))
+   Hooked since replaces nowf tid by 0
+   
+   B(P) means there was a time at which there was a barrier event, since which P held locally
+        -- P since bev& 
+   bev& is a boolean variable, used only for B and U.
+   Hooked B is just hooked since.
+   
+   U(P) means that P has held in all threads since a barrier event
+        -- exists hi (hi<nowf tid /\ bev&^hi /\ forall t (forall hi' (hi<=hi'<nowf t -> P^hi'))@t)
+   It doesn't use an embedded since because that nobbles Z3. I don't think it matters that
+   it quantifies across threads: all it is asking is that there is a numbering of states
+   which makes certain local orderings possible. I don't think it matters that all
+   threads are ordered against one 'global' barrier event either.
+   
+   Note that U(x=0) does not imply (^x)=0: the hat_state could be prior to the bev& state.
+   That's intentional: you can't suppose that interference which arrives after a U-creating
+   barrier (like a Power sync) started out after that barrier. 
+   
+   ****************************************************************************** *)
  
 let valuefn_name = "&v"             (* (vname,place,history index) *)
 let latestfn_name = "&latest"       (* (vname,ishatted,history index) *)
@@ -191,6 +216,8 @@ let barrier_event_name = "bev&"     (* & on the end cos it's a variable *)
 let tid_name = "&tid"
 let hat_hi_name = "&hat"
 let dhat_hi_name = "&hathat"
+
+let now_function_name = "&now"
 
 let barrier_event_formula = _recFname barrier_event_name
 let hat_hi_formula = _recFname hat_hi_name
@@ -214,10 +241,19 @@ let typed_name prefix t =
 
 (* U(since) used to be horrible, and U and B are versions of since. 
    To deal with some of the horrors, we try to simplify them away.
-   NoHook that U does not see through since, sofar and ouat, it all got easier.
  *)
 
 let rec simplify f =
+  let check_barring uf =
+    let uf' = enbar NameSet.empty uf in
+    if not (Formula.eq uf uf') then 
+      raise (Error (Printf.sprintf "%s: can't embed %s (enbarred as %s)"
+                                   (Sourcepos.string_of_sourcepos uf.fpos)
+                                   (string_of_formula uf)
+                                   (string_of_formula uf')
+                   )
+            )
+  in
   let pushlogical build mf = 
     (* this was too enthusiastic. Lost proofs. So we don't do it. But we preserve its bones for a while. *)
     None
@@ -243,36 +279,26 @@ let rec simplify f =
   let optsimp f = match f.fnode with
     | Univ (hk,uf) -> 
         (match uf.fnode with
-         | Univ  (_,uf')     -> Some (Some (simplify (universal hk uf')))
-         | Bfr   (_,bf)      -> Some (Some (simplify (universal hk bf )))
-         | Fandw   (_,ef)    -> Some (Some (simplify (universal hk ef )))
-         | Since (_,p,q)     -> 
-             Some (Some (simplify (conjoin [universal hk (conjoin [p; ouat hk q]); since hk p q]))) 
-         (* | Sofar (_,sf)    -> 
-             let indivs = individualise sf in
-             let history = conjoin (sf :: List.map (sofar None hk) indivs) in
-             Some (simplify (conjoin [universal hk history; sofar None hk sf])) 
-          *)
-         |_                   ->
-             (* can't see how to do this with Sofar translation above ...
-                (match extract_shorthand uf with
-                 | Some (_,_,n,ouf) when n=m_ouat_token
-                                -> Some (simplify (ouat None hk ouf))
-                 | _            -> 
-              *)
-                  pushlogical (_recUniv hk) uf 
-                  |~~ (fun () ->
-                          (* this is the 'old' way, which quantifies (fandw) across threads. But then
-                             so does the 'new' way below. And at least this one aligns the boundary
-                             events, which is a reasonable abstraction. Aligning them properly with
-                             the 'new' treatment would be a bit scary. I might attempt it one day.
-                           *)
-                          Some (Some (simplify (since hk (simplify (fandw NoHook uf)) barrier_event_formula)))
-                          (* the 'new way
-                             Some (Some (fandw hk (simplify (since NoHook uf barrier_event_formula))))
-                           *)
-                       )
-            (* ) *)
+         | Univ  (_,uf')     -> _SomeSome (simplify (universal hk uf'))
+         | Bfr    (_,bf)     -> _SomeSome (simplify (universal hk bf ))
+         | Fandw  (_,ef)     -> _SomeSome (simplify (universal hk ef ))
+         | Sofar (_, sf)     -> _SomeSome (simplify (sofar hk sf)) 
+         | Since (_,p,q)     -> check_barring uf; check_barring p;
+                                _SomeSome (simplify (since hk (fandw NoHook p) (conjoin [fandw NoHook uf; barrier_event_formula])))
+         |_                  ->
+             check_barring uf;
+             pushlogical (_recUniv hk) uf 
+             |~~ (fun () ->
+                     (* this is the 'old' way, which quantifies (fandw) across threads. But then
+                        so does the 'new' way below. And at least this one aligns the boundary
+                        events, which is a reasonable abstraction. Aligning them properly with
+                        the 'new' treatment would be a bit scary. I might attempt it one day.
+                      *)
+                     Some (Some (simplify (since hk (simplify (fandw NoHook uf)) barrier_event_formula)))
+                     (* the 'new way
+                        Some (Some (fandw hk (simplify (since NoHook uf barrier_event_formula))))
+                      *)
+                  )
         )
     | Bfr (hk,bf) -> 
         (* because we prohibit Bfr formulae with coincidences, and we don't construct them
@@ -290,6 +316,17 @@ let rec simplify f =
          | Sofar (_,sf)      -> Some (Some (simplify (conjoin [sofar hk sf; ouat hk f2]))) 
          | _                 -> None
         )
+    | Sofar (hk,sf) ->
+        (match sf.fnode with
+         | Univ  (_,uf)  -> _SomeSome (simplify (sofar hk uf))
+         | Bfr   (_,bf)  -> _SomeSome (simplify (sofar hk bf))
+         | Fandw (_,ef)  -> _SomeSome (simplify (sofar hk ef))
+         | Since (_,p,q) -> _SomeSome (simplify (conjoin [sofar hk p; fandw hk (ouat hk q)]))
+         | Sofar (_,sf') -> _SomeSome (simplify (sofar hk sf'))
+         | _             -> check_barring sf;
+                            None
+        )
+    (* Ouat isn't since and doesn't cross threads, so doesn't get treated here *)
     | _ -> None
   in
   let r = Formula.map optsimp f in
@@ -384,12 +421,14 @@ let embedcoherencevar cxt v vtype =
   let pair, f = cv_coherence v vtype in
   addcxt pair cxt, Some f
 
+(* I think this might be a little redundant ... *)
 type situation = 
   | Amodal 
   | InSince of formula 
   | InBfr of formula 
   | InU of formula
   | InSofar of formula
+  | InOuat of formula
 
 (* hats and tildes don't occur in same query *)
 
@@ -401,9 +440,17 @@ let hi_of_hat = function
   | Hat  | Tilde  -> hat_hi_formula
   | DHat | DTilde -> dhat_hi_formula
 
+(* hatted stuff comes from a state before now, and before the hooked state *)
 let hat_hi_asserts = 
   let zero = _recFint_of_int 0 in
   [ _recLess hat_hi_formula zero; _recLess dhat_hi_formula zero ]
+
+(* note that hooked formulae operate in state 0; unhooked in state 1 (if stabq) or 0. 
+   That last is regulated by the now function: if there's a hook around it will go for 1.
+ *)
+let nowf tid = _recApp now_function_name [tid]
+let new_nowf f _ = f
+let hooked_now = _recFint_of_int 0
 
 let embed bcxt cxt orig_f = 
   
@@ -412,23 +459,17 @@ let embed bcxt cxt orig_f =
      second happens I'll take the outer (which is the same as taking the inner, isn't it? but the code works that way).
    *)
 
-  let rec tsf bounds situation (tn:int) (tidopt:Formula.formula option) (hiopt:Name.name option) (hicurr:Formula.formula) bcxt cxt f = 
+  let rec tsf bounds situation (tidf:formula) (hiopt:Name.name option) (nowf:formula->formula) bcxt cxt f = 
     let noisy = !Settings.verbose_modality in
     (* if noisy then Printf.printf "\ntsf formula is %s" (string_of_formula f); *)
-    let _recFint_of_pl ht =
+    let formula_of_hat ht = 
       match ht with 
-      | None      -> _recFint (string_of_int tn) 
+      | None      -> tidf
       (* tildes and hats don't occur in the same query *)
       | Some hat  -> _recFint_of_int (tn_of_hat hat)
-      (* | There, false -> _recFint (string_of_int (-1)) (* specially for Latest *) *)
-    in
-    let formula_of_hat ht = 
-      match tidopt with
-      | Some tidf -> tidf
-      | _         -> _recFint_of_pl ht
     in
     let hi_of_ep hk =
-      match hk with Hook -> _recFint (string_of_int (-1)) | _ -> hicurr
+      match hk with Hook -> hooked_now | _ -> nowf tidf
     in
     let hiformula_of_ep hk =
       either (hi_of_ep hk) (hiopt &~~ (_Some <.> _recFname))
@@ -443,28 +484,23 @@ let embed bcxt cxt orig_f =
                  (_recImplies limits bf)
     in
     let tevw cxt hk ef =
-      Printf.printf "\ntranslating %s" (string_of_formula (_recFandw hk ef));
-      let tidf = _recFname tid_name in
+      (* Printf.printf "\ntranslating %s" (string_of_formula (_recFandw hk ef)); *)
+      let tidf' = _recFname tid_name in
       let cxt, ef = 
-        anyway2 (opttsf bounds (InU ef) tn (Some tidf) hiopt (hiformula_of_ep hk) bcxt) 
+        anyway2 (opttsf bounds (InU ef) tidf' hiopt (new_nowf (hiformula_of_ep hk)) bcxt) 
                 cxt 
                 ef 
       in 
       Some (cxt, Some (bindallthreads tid_name ef))
     in
-    let temporal_extra bcxt cxt hk p =
-      match tidopt with 
-      | None -> cxt, _recTrue
-      | _    -> anyway2 (opttsf bounds situation tn tidopt hiopt (hiformula_of_ep hk) bcxt) cxt p
-    in
     if !Settings.verbose || !Settings.verbose_modality then
-      Printf.printf "\nembed tidopt=%s f=%s" (string_of_option string_of_formula tidopt) (string_of_formula f); 
+      Printf.printf "\nembed tidf=%s f=%s" (string_of_formula tidf) (string_of_formula f); 
     let process_var cxt ht hk v f =
       let tidf, epf = 
-      match tn, ht, hk with
-      | 0, Some ht, NoHook ->
+      match ht, hk with
+      | Some ht, NoHook ->
           _recFint_of_int (tn_of_hat ht), hi_of_hat ht
-      | _                  ->
+      | _               ->
           formula_of_hat ht, hiformula_of_ep hk
       in
       let vtype = if v=barrier_event_name then Bool else bcxt <@@> f in
@@ -493,23 +529,21 @@ let embed bcxt cxt orig_f =
          | _           -> None
         ) 
         &~~ (fun f -> Some (cxt, Some f))
-    | Cohere (v, f1, f2) ->
-        let cxt, f1 = anyway2 (opttsf bounds situation tn tidopt hiopt hicurr bcxt) cxt f1 in
-        let cxt, f2 = anyway2 (opttsf bounds situation tn tidopt hiopt hicurr bcxt) cxt f2 in
+    (*| Cohere (v, f1, f2) ->
+        let cxt, f1 = anyway2 (opttsf bounds situation tidf hiopt nowf bcxt) cxt f1 in
+        let cxt, f2 = anyway2 (opttsf bounds situation tidf hiopt nowf bcxt) cxt f2 in
         let cxt, f = embedcoherence cxt v (bcxt <@@> f) f1 f2 in
-        Some (cxt, Some f)
+        Some (cxt, Some f)*)
     | Since (hk, f1, f2) ->
-        (* U does _not_ see through since. So we ignore tidopt, except for extra_f1 *)
-        let cxt, extra_f1 = temporal_extra bcxt cxt hk (conjoin [f1; ouat hk f2]) in
         let hi = match hiopt with
                  | None    -> history_index_name 
                  | Some hi -> new_name history_index_name 
         in
         let hi_formula = _recFname hi in
-        let cxt, f2 = anyway2 (opttsf bounds (InSince f2) tn None (Some hi) hi_formula bcxt) cxt f2 in
+        let cxt, f2 = anyway2 (opttsf bounds (InSince f2) tidf (Some hi) (new_nowf hi_formula) bcxt) cxt f2 in
         let hi1 = new_name history_index_name in
         let hi1_formula = _recFname hi1 in
-        let cxt, f1 = anyway2 (opttsf bounds (InSince f1) tn None (Some hi1) hi1_formula bcxt) cxt f1 in
+        let cxt, f1 = anyway2 (opttsf bounds (InSince f1) tidf (Some hi1) (new_nowf hi1_formula) bcxt) cxt f1 in
         let since_assert =
           if !Settings.simpleUBsince then
             ((* This somewhat simpler version -- which doesn't demand a previous state -- is 
@@ -519,13 +553,13 @@ let embed bcxt cxt orig_f =
              bindExists 
                (NameSet.singleton hi)
                (conjoin 
-                  [cmp_op hi_formula hicurr;
+                  [cmp_op hi_formula (nowf tidf);
                    f2; 
                    bindForall 
                      (NameSet.singleton hi1) 
                      (_recImplies 
                         (conjoin [_recLessEqual hi_formula hi1_formula;
-                                  cmp_op hi1_formula hicurr
+                                  cmp_op hi1_formula (nowf tidf)
                                  ]
                         )
                         f1
@@ -534,22 +568,26 @@ let embed bcxt cxt orig_f =
                )
             )
           else (
-            (* treating Sofar like Bfr: think that's right *)
+            (* treating Sofar like U: think that's right *)
             let cmp_op1, cmp_op2, limit = 
               match situation, hk with 
               | Amodal   , NoHook 
-              | InSince _, NoHook -> _recLessEqual, _recLessEqual, hicurr 
-              | Amodal   , Hook 
-              | InSince _, Hook -> _recLess     , _recLess     , hicurr
+              | InSince _, NoHook -> _recLessEqual, _recLessEqual, nowf tidf 
               | InBfr _  , NoHook 
               | InSofar _, NoHook 
-              | InU   _  , NoHook -> _recLess     , _recLessEqual, hicurr
+              | InOuat  _, NoHook 
+              | InU   _  , NoHook -> _recLess     , _recLessEqual, nowf tidf
+              | Amodal   , Hook   -> _recLess     , _recLess     , nowf tidf
               | InBfr _  , Hook 
               | InSofar _, Hook 
-              | InU   _  , Hook -> _recLess     , _recLess     , (match hicurr.fnode with
-                                                                 | Fint "0" -> _recFint "-1"
-                                                                 | _        -> _recMinus hicurr (_recFint "1")
-                                                                )
+              | InOuat  _, Hook 
+              | InU     _, Hook   
+              | InSince _, Hook   -> raise (Error ("hooked since inside something else " ^ (string_of_formula f)))
+                                     (* _recLess     , _recLess     , (match (nowf tidf).fnode with
+                                                                       | Fint "0" -> _recFint "-1"
+                                                                       | _        -> _recMinus (nowf tidf) (_recFint "1")
+                                                                      )
+                                      *)
             in
             bindExists 
               (NameSet.singleton hi)
@@ -560,7 +598,7 @@ let embed bcxt cxt orig_f =
                     (NameSet.singleton hi1) 
                     (_recImplies 
                        (conjoin [_recLessEqual hi_formula hi1_formula;
-                                 cmp_op2 hi1_formula hicurr
+                                 cmp_op2 hi1_formula (nowf tidf)
                                 ]
                        )
                        f1
@@ -569,43 +607,41 @@ let embed bcxt cxt orig_f =
               )
           )
         in
-        Some (cxt, Some (conjoin [(* extra_f1; *) since_assert]))
+        Some (cxt, Some since_assert)
     | Sofar (hk, sf) ->
-        let do_sofar cxt tidopt extra_sf =
-          (* same as since, except from the beginning of time *)
-          let hi = match hiopt with
-                   | None    -> history_index_name 
-                   | Some hi -> new_name history_index_name 
-          in
-          let hi_formula = _recFname hi in
-          let cxt, sf = anyway2 (opttsf bounds (InSofar sf) tn tidopt (Some hi) hi_formula bcxt) cxt sf in
-          let cmp_op = match hk with | NoHook -> _recLessEqual | Hook -> _recLess in
-          let sofar_assertion = 
-            bindForall (NameSet.singleton hi) (_recImplies (cmp_op hi_formula hicurr) sf)
-          in
-          Some (cxt, Some (conjoin [extra_sf; sofar_assertion]))
+        (* forall threads forall time sf *)
+        let hi = match hiopt with
+                 | None    -> history_index_name 
+                 | Some hi -> new_name history_index_name 
         in
-        (* if it's outside U, or not multivariate, just do it *)
-        if tidopt=None ||
-           NameSet.cardinal (NameSet.filter Name.is_anyvar (Formula.frees sf)) < 2
-        then
-          do_sofar cxt tidopt _recTrue
-        else
-          (* inside U and multivariate *)
-          (let cxt, extra_sf = 
-             let history = sf :: List.map (sofar hk) (individualise sf) in
-             let cxt, bcxt = completed_typeassign_formula_list cxt bcxt Bool history in
-             temporal_extra bcxt cxt hk (conjoin history) 
-           in
-           do_sofar cxt None extra_sf
-          )
+        let hi_formula = _recFname hi in
+        let tid_formula = _recFname tid_name in
+        let now = if hk=Hook then hooked_now else nowf tid_formula in 
+        let cxt, sf = anyway2 (opttsf bounds (InSofar sf) tid_formula (Some hi) (new_nowf hi_formula) bcxt) cxt sf in
+        let since_always = 
+          bindForall (NameSet.singleton hi) (_recImplies (_recLessEqual hi_formula now) sf)
+        in
+        Some (cxt, Some (bindallthreads tid_name since_always))
+    | Ouat (hk, sf) ->
+        (* exists time (not sf) *)
+        let hi = match hiopt with
+                 | None    -> history_index_name 
+                 | Some hi -> new_name history_index_name 
+        in
+        let hi_formula = _recFname hi in
+        let now = if hk=Hook then hooked_now else nowf tidf in 
+        let cxt, sf = anyway2 (opttsf bounds (InSofar sf) tidf (Some hi) (new_nowf hi_formula) bcxt) cxt sf in
+        let since_always = 
+          bindExists (NameSet.singleton hi) (_recAnd (_recLessEqual hi_formula now) sf)
+        in
+        Some (cxt, Some since_always)
     | Fandw (hk,ef) -> tevw cxt hk ef
     | Binder (fe, v, bf) ->
         (* if Name.is_anyvar v then 
              raise (Error (Sourcepos.string_of_sourcepos f.fpos ^ ": cannot embed variable binding " ^ string_of_formula f));
          *)
         let bounds = NameSet.add v bounds in
-        let cxt, bf' = anyway2 (opttsf bounds situation tn tidopt hiopt hicurr bcxt)
+        let cxt, bf' = anyway2 (opttsf bounds situation tidf hiopt nowf bcxt)
                                ((v,bcxt<@@>f)::cxt)
                                bf
         in Some (List.remove_assoc v cxt, Some (_recBinder fe v bf'))
@@ -614,7 +650,7 @@ let embed bcxt cxt orig_f =
         Some (embedcoherencevar cxt v (bcxt <@@> var)) 
     | Threaded (tid, tf) ->
         let cxt, tf' =
-          anyway2 (opttsf bounds situation tid tidopt hiopt hicurr bcxt) cxt tf        
+          anyway2 (opttsf bounds situation (_recFint_of_int tid) hiopt nowf bcxt) cxt tf        
         in
         Some (cxt, Some tf')
     | Bfr  _ 
@@ -627,17 +663,10 @@ let embed bcxt cxt orig_f =
     | _ -> 
         if noisy then Printf.printf " -- ignored";
         None
-  and opttsf bounds situation tn tidopt hiopt hicurr bcxt = 
-    Formula.optmapfold (tsf bounds situation tn tidopt hiopt hicurr bcxt)
-  and individualise _P = 
-    let pfrees = NameSet.filter Name.is_anyvar (Formula.frees _P) in
-    if NameSet.cardinal pfrees<2 then 
-      [] (* not even two free variables: we don't need to touch it *)
-    else
-      List.map (fun v -> bindExists (NameSet.remove v pfrees) _P)
-               (NameSet.elements pfrees)
+  and opttsf bounds situation tidf hiopt nowf bcxt = 
+    Formula.optmapfold (tsf bounds situation tidf hiopt nowf bcxt)
   in
-  anyway2 (opttsf NameSet.empty Amodal !Thread.threadnum None None (_recFint "0") bcxt) cxt orig_f
+  anyway2 (opttsf NameSet.empty Amodal (_recFint_of_int !Thread.threadnum) None nowf bcxt) cxt orig_f
 
 
 let mfilter = List.filter is_modalitybinding
