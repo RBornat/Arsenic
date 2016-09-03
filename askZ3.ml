@@ -227,21 +227,42 @@ let z3check_query question task noisy assertions query =
     | LogArith(f, Implies, _) when is_recFalse f -> verbtriv (Valid (assertions, query))
     | LogArith(_, Implies, t) when is_recTrue  t -> verbtriv (Valid (assertions, query))
     | _                                          ->
-    (* What's the threadcount appropriate to this query?
+    (* What's the threadcount appropriate to this query? and is it a stability query?
     
-       If a query has (^) or (~) alone, then two threads.
-       If it has (^) and (^^) or ((~) and (~~) together, then three.
-       If it has Threaded, then count the threads.
-       Otherwise just one thread (it's an SC query, really it is).
+       If a query has (^) or (~) alone, then two threads, and it's stability.
+       If it has (^) and (^^) or ((~) and (~~) together, then three, and it's stability.
+       If it has Threaded, then count the threads, and it's not stability.
+       Otherwise just one thread.
      *)
-    let count_threads n f =
+    let count_threads (n,stabq) f =
       match f.fnode with
-      | Threaded (i, _)    -> Some (Pervasives.max n (i+1))
-      | Fvar(Some h, _, _) -> let i = Modality.tn_of_hat h in
-                              Some (Pervasives.max n (i+1))
+      | Threaded (i, _)     -> Some (Pervasives.max n (i+1), false)
+      | Fvar (Some h, _, _) -> let i = Modality.tn_of_hat h in
+                               Some (Pervasives.max n (i+1),true)
+      | Fvar  (_, Hook, _)
+      | Since (Hook, _, _)
+      | Bfr      (Hook, _)
+      | Univ     (Hook, _)
+      | Sofar    (Hook, _)
+      | Ouat     (Hook, _)
+      | Fandw    (Hook, _) -> Some (n, true)
       | _                  -> None
     in
-    let tc = List.fold_left (Formula.fold count_threads) 1 (query::assertions) 
+    let tc, is_stabq = List.fold_left (Formula.fold count_threads) (1,false) (query::assertions) 
+    in
+    (* define the 'now' function *)
+    let assertions = 
+      let tid_f = _recFname tid_name in
+      let zero = _recFint_of_int 0 in
+      let one = _recFint_of_int 1 in
+      (bindForall (NameSet.singleton tid_name) 
+                            (_recEqual (_recApp now_function_name [tid_f])
+                                       (if is_stabq then 
+                                          _recIte (_recEqual tid_f zero) one zero
+                                        else zero
+                                       )
+                            )
+      )::assertions
     in
     Settings.temp_setting Thread.threadcount tc (fun () ->
       (try 
@@ -550,6 +571,7 @@ let z3check_query question task noisy assertions query =
                | Univ          _             
                | Fandw         _             
                | Sofar         _
+               | Ouat          _
                | Since         _
                | Cohere        _     
                | Threaded      _     
