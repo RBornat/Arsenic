@@ -86,6 +86,8 @@ simpletest:
 	./Test proofs/IRIW.proof
 	./Test proofs/UEXT.unproof -error 7 "UEXT stability"
 	./Test proofs/uo-unstable-interference.unproof -error 4 "self-uo stability"
+
+tokenringtest:
 #	./Test -SCloc false proofs/LBwithoutSCloc.proof
 #	./Test proofs/tokenringsingleassert.proof
 	./Test proofs/tokenringsingleifthen.proof
