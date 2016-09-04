@@ -17,26 +17,24 @@ open Assign
    ****************************************************** *)
    
 let enhat hatting orig_f =
-  let rec opt_hat binders f =
+  let rec opt_hat f =
     match f.fnode with
-    | Fvar(None,NoHook,v)     -> if NameSet.mem v binders 
-                                 then None 
-                                 else _SomeSome (_recFvar (Some hatting) NoHook v)
+    | Fvar(None,NoHook,v)     -> _SomeSome (_recFvar (Some hatting) NoHook v)
     | Bfr (NoHook,bf)         -> if is_Tildehatting hatting 
-                                 then ohat binders bf &~~ (_SomeSome <.> _recBfr NoHook)
-                                 else _SomeSome (conjoin [f; hat binders bf]) (* because B(P)=>P *)
-    | Univ (NoHook,uf)        -> _SomeSome (conjoin [f; hat binders uf])      (* because U(P)=>P *) 
+                                 then ohat bf &~~ (_SomeSome <.> _recBfr NoHook)
+                                 else _SomeSome (conjoin [f; hat bf]) (* because B(P)=>P *)
+    | Univ (NoHook,uf)        -> _SomeSome (conjoin [f; hat uf])      (* because U(P)=>P *) 
     (* | Latest (None,NoHook,v)       -> if hatting=InflightHat 
                                       then _SomeSome (_recLatest There NoHook v)
                                       else Some None (* don't touch it! *)
      *)
-    | Sofar (NoHook,sf)       -> _SomeSome (conjoin [f; hat binders sf])      (* because Sofar(P)=>P *)
-    | Ouat  (NoHook,sf)       -> ohat binders sf &~~ (_SomeSome <.> _recOuat NoHook) (* Ouat is local *)
-    | Since (NoHook,f1,f2)    -> optionpair_either (ohat binders) f1 (ohat binders) f2
+    | Sofar (NoHook,sf)       -> _SomeSome (conjoin [f; hat sf])      (* because Sofar(P)=>P *)
+    | Ouat  (NoHook,sf)       -> ohat sf &~~ (_SomeSome <.> _recOuat NoHook) (* Ouat is local *)
+    | Since (NoHook,f1,f2)    -> optionpair_either ohat f1 ohat f2
                                  &~~ (_SomeSome <.> uncurry2 (_recSince NoHook)) 
-    (* we hat even inside binders. Oh yes. *) 
+    (* we hat even inside binders. Oh yes. Because binding a variable doesn't bind thread or epoch *) 
     | Binder (bk,n,bf)
-                              -> (ohat (NameSet.add n binders) bf &~~ (_SomeSome <.> _recBinder bk n))
+                              -> (ohat bf &~~ (_SomeSome <.> _recBinder bk n))
                                  |~~ (fun () -> Some None)
     | Fvar    _           
     | Bfr     _           
@@ -50,10 +48,10 @@ let enhat hatting orig_f =
                                                          )
                                        )
     | _                         -> None
-  and ohat binders f = Formula.optmap (opt_hat binders) f
-  and hat binders f = Formula.map (opt_hat binders) f
+  and ohat f = Formula.optmap opt_hat f
+  and hat f = Formula.map opt_hat f
   in
-  hat NameSet.empty orig_f
+  hat orig_f
 
 (* ******************** strongest-post substitution *************************
         
