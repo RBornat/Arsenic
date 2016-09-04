@@ -20,8 +20,8 @@ let enhat hatting orig_f =
   let rec opt_hat f =
     match f.fnode with
     | Fvar(None,NoHook,v)     -> _SomeSome (_recFvar (Some hatting) NoHook v)
-    | Bfr (NoHook,bf)         -> if is_Tildehatting hatting 
-                                 then ohat bf &~~ (_SomeSome <.> _recBfr NoHook)
+    | Bfr (None,NoHook,bf)    -> if is_Tildehatting hatting 
+                                 then ohat bf &~~ (_SomeSome <.> _recBfr (Some hatting) NoHook)
                                  else _SomeSome (conjoin [f; hat bf]) (* because B(P)=>P *)
     | Univ (NoHook,uf)        -> _SomeSome (conjoin [f; hat uf])      (* because U(P)=>P *) 
     (* | Latest (None,NoHook,v)       -> if hatting=InflightHat 
@@ -29,9 +29,9 @@ let enhat hatting orig_f =
                                       else Some None (* don't touch it! *)
      *)
     | Sofar (NoHook,sf)       -> _SomeSome (conjoin [f; hat sf])      (* because Sofar(P)=>P *)
-    | Ouat  (NoHook,sf)       -> ohat sf &~~ (_SomeSome <.> _recOuat NoHook) (* Ouat is local *)
-    | Since (NoHook,f1,f2)    -> optionpair_either ohat f1 ohat f2
-                                 &~~ (_SomeSome <.> uncurry2 (_recSince NoHook)) 
+    | Ouat  (None,NoHook,sf)  -> ohat sf &~~ (_SomeSome <.> _recOuat (Some hatting) NoHook) (* Ouat is local *)
+    | Since (None,NoHook,f1,f2) -> optionpair_either ohat f1 ohat f2
+                                 &~~ (_SomeSome <.> uncurry2 (_recSince (Some hatting) NoHook)) 
     (* we hat even inside binders. Oh yes. Because binding a variable doesn't bind thread or epoch *) 
     | Binder (bk,n,bf)
                               -> (ohat bf &~~ (_SomeSome <.> _recBinder bk n))
@@ -107,23 +107,26 @@ let optsp_substitute mapping orig_f =
     | Fvar     (_,NoHook,v)   -> None (* Formula.optmap leaves it alone *)
     | Binder (bk,n,bf)        -> (subopt (List.remove_assoc n mapping) &~ (_SomeSome <.> _recBinder bk n)) bf 
                                  |~~ (fun () -> Some None) (* don't touch it! *)
-    | Bfr (NoHook,bf)         -> domodality _recBfr conjoin bf
+    | Bfr (None,NoHook,bf)    -> domodality (_recBfr None) conjoin bf
+    | Bfr (Some _,NoHook,_)   -> Some None
+    | Ouat (None,NoHook, sf)  -> domodality (_recOuat None) disjoin sf
+    | Ouat (Some _,NoHook,_)  -> Some None
+    | Since (None,NoHook,f1,f2) -> (if isvarmapping mapping f 
+                                then (* x\xhook affects only f1 *)
+                                  subopt mapping f1 
+                                  &~~ (fun f1' -> _SomeSome (conjoin [f; f1']))
+                                else (* r\rhook affects both *)
+                                  optionpair_either (subopt mapping) f1 (subopt mapping) f2
+                                  &~~ (fun (f1,f2) -> _SomeSome (_recSince None NoHook f1 f2))
+                               )
+                               |~~ (fun () -> Some None)
+    | Since (Some _,NoHook,_,_) -> Some None
     | Univ (NoHook,uf)        -> domodality _recUniv conjoin uf
     (* | Latest (pl,NoHook,v)       -> if List.mem_assoc v mapping 
                                        then _SomeSome (_recLatest pl Hook v)
                                        else Some None
      *)
     | Sofar (NoHook, sf)      -> domodality _recSofar conjoin sf
-    | Ouat  (NoHook, sf)      -> domodality _recOuat disjoin sf
-    | Since (NoHook,f1,f2)  -> (if isvarmapping mapping f 
-                                then (* x\xhook affects only f1 *)
-                                  subopt mapping f1 
-                                  &~~ (fun f1' -> _SomeSome (conjoin [f; f1']))
-                                else (* r\rhook affects both *)
-                                  optionpair_either (subopt mapping) f1 (subopt mapping) f2
-                                  &~~ (fun (f1,f2) -> _SomeSome (_recSince NoHook f1 f2))
-                               )
-                               |~~ (fun () -> Some None)
     | Fvar      _
     | Bfr       _           
     | Univ      _            
@@ -170,14 +173,14 @@ let strongest_post with_result pre assign =
         let mvs f =
           let optmvs fvs f =
             match f.fnode with
-            | Bfr      (_,bf) -> Some (vsof fvs bf)
-            | Univ     (_,uf) -> Some (vsof fvs uf)
-            | Sofar    (_,sf) -> Some (vsof fvs sf)
-            | Ouat     (_,sf) -> Some (vsof fvs sf)
-            | Since (_,f1,f2) -> Some (vsof (vsof fvs f1) f2)
-            | Binder  (_,n,f) -> let bvs = vsof NameSet.empty f in
-                                    Some (NameSet.union fvs (NameSet.remove n bvs))
-            | _               -> None
+            | Bfr    (_,_,bf)   -> Some (vsof fvs bf)
+            | Univ     (_,uf)   -> Some (vsof fvs uf)
+            | Sofar    (_,sf)   -> Some (vsof fvs sf)
+            | Ouat   (_,_,sf)   -> Some (vsof fvs sf)
+            | Since (_,_,f1,f2) -> Some (vsof (vsof fvs f1) f2)
+            | Binder  (_,n,f)   -> let bvs = vsof NameSet.empty f in
+                                   Some (NameSet.union fvs (NameSet.remove n bvs))
+            | _                 -> None
           in
           Formula.fold optmvs NameSet.empty f
         in

@@ -86,16 +86,24 @@ let enbar binders _P =
         (optbar pos (NameSet.add n binders) bf &~~ (_SomeSome <.> _recBinder bk n)) 
         |~~ (fun () -> Some None)
     (* here come the temporal cases. We know we are not univariate *)
-    | Since (NoHook, f1, f2) ->
+    | Bfr   (None, NoHook, bf) ->
         treatment pos binders
-          (fun _ -> _SomeSome (conjoin [bar pos binders f1; bar pos binders (ouat NoHook f2)]))
-          f
-    | Bfr   (NoHook, bf) ->
-        treatment pos binders
-        (fun _ -> (optbar pos binders bf &~~ (_SomeSome <.> _recBfr NoHook))
+        (fun _ -> (optbar pos binders bf &~~ (_SomeSome <.> _recBfr None NoHook))
                   |~~ (fun () -> Some None)
         )
         bf
+    | Ouat  (None, NoHook, sf) ->
+        treatment pos binders 
+        (fun _ ->
+           match Formula.deconjoin sf with
+           | Some fs -> _SomeSome (bar pos binders (conjoin (List.map (ouat None NoHook) fs)))
+           | None    -> _SomeSome (newrand ())
+        )
+        sf
+    | Since (None, NoHook, f1, f2) ->
+        treatment pos binders
+          (fun _ -> _SomeSome (conjoin [bar pos binders f1; bar pos binders (ouat None NoHook f2)]))
+          f
     | Univ  (NoHook, uf) ->
         treatment pos binders
         (fun _ -> (optbar pos binders uf &~~ (_SomeSome <.> _recUniv NoHook))
@@ -110,20 +118,16 @@ let enbar binders _P =
            | None    -> _SomeSome (bar pos binders sf)
         )
         sf
-    | Ouat  (NoHook, sf) ->
-        treatment pos binders 
-        (fun _ ->
-           match Formula.deconjoin sf with
-           | Some fs -> _SomeSome (bar pos binders (conjoin (List.map (ouat NoHook) fs)))
-           | None    -> _SomeSome (newrand ())
-        )
-        sf
-    (* no hooking, please *)
-    | Since (Hook, _, _) 
-    | Bfr   (Hook, _) 
+    (* no hatting or hooking, please *)
+    | Since (Some _, _, _, _) 
+    | Bfr   (Some _, _, _)  
+    | Ouat  (Some _, _, _) 
+    | Since (_,Hook, _, _) 
+    | Bfr   (_,Hook, _)  
+    | Ouat  (_,Hook, _) 
     | Univ  (Hook, _) 
     | Sofar (Hook, _)  
-    | Ouat  (Hook, _) -> bad f
+    | Fandw (Hook, _) -> bad f
     (* otherwise *)
     | _               -> None
   and optbar pos binders f = Formula.optmap (enb_opt pos binders) f
@@ -280,11 +284,11 @@ let rec simplify f =
     | Univ (hk,uf) -> 
         (match uf.fnode with
          | Univ  (_,uf')     -> _SomeSome (simplify (universal hk uf'))
-         | Bfr    (_,bf)     -> _SomeSome (simplify (universal hk bf ))
+         | Bfr    (_,_,bf)   -> _SomeSome (simplify (universal hk bf ))
          | Fandw  (_,ef)     -> _SomeSome (simplify (universal hk ef ))
-         | Sofar (_, sf)     -> _SomeSome (simplify (sofar hk sf)) 
-         | Since (_,p,q)     -> check_barring uf; check_barring p;
-                                _SomeSome (simplify (since hk (fandw NoHook p) (conjoin [fandw NoHook uf; barrier_event_formula])))
+         | Sofar (_,sf)      -> _SomeSome (simplify (sofar hk sf)) 
+         | Since (_,_,p,q)   -> check_barring uf; check_barring p;
+                                _SomeSome (simplify (since None hk (fandw NoHook p) (conjoin [fandw NoHook uf; barrier_event_formula])))
          |_                  ->
              check_barring uf;
              pushlogical (_recUniv hk) uf 
@@ -294,37 +298,37 @@ let rec simplify f =
                         events, which is a reasonable abstraction. Aligning them properly with
                         the 'new' treatment would be a bit scary. I might attempt it one day.
                       *)
-                     Some (Some (simplify (since hk (simplify (fandw NoHook uf)) barrier_event_formula)))
+                     Some (Some (simplify (since None hk (simplify (fandw NoHook uf)) barrier_event_formula)))
                      (* the 'new way
-                        Some (Some (fandw hk (simplify (since NoHook uf barrier_event_formula))))
+                        Some (Some (fandw hk (simplify (since None NoHook uf barrier_event_formula))))
                       *)
                   )
         )
-    | Bfr (hk,bf) -> 
+    | Bfr (ht,hk,bf) -> 
         (* because we prohibit Bfr formulae with coincidences, and we don't construct them
            automatically, we don't need to do what we do with _U(since) and _U(sofar) above.
          *)
-        pushlogical (_recBfr hk) bf 
+        pushlogical (_recBfr ht hk) bf 
         |~~ (fun () ->
-                Some (Some (simplify (since hk bf barrier_event_formula)))
+                Some (Some (simplify (since ht hk bf barrier_event_formula)))
              )
-    | Since (hk,f1,f2) ->
+    | Since (ht,hk,f1,f2) ->
         let f1 = simplify f1 in
         let f2 = simplify f2 in
         (match f1.fnode with
-         | Since (_,sf1,sf2) -> Some (Some (simplify (since hk sf1 (conjoin [f1;f2]))))
-         | Sofar (_,sf)      -> Some (Some (simplify (conjoin [sofar hk sf; ouat hk f2]))) 
-         | _                 -> None
+         | Since (_,_,sf1,sf2) -> Some (Some (simplify (since ht hk sf1 (conjoin [f1;f2]))))
+         | Sofar (_,sf)        -> Some (Some (simplify (conjoin [sofar hk sf; ouat ht hk f2]))) 
+         | _                   -> None
         )
     | Sofar (hk,sf) ->
         (match sf.fnode with
-         | Univ  (_,uf)  -> _SomeSome (simplify (sofar hk uf))
-         | Bfr   (_,bf)  -> _SomeSome (simplify (sofar hk bf))
-         | Fandw (_,ef)  -> _SomeSome (simplify (sofar hk ef))
-         | Since (_,p,q) -> _SomeSome (simplify (conjoin [sofar hk p; fandw hk (ouat hk q)]))
-         | Sofar (_,sf') -> _SomeSome (simplify (sofar hk sf'))
-         | _             -> check_barring sf;
-                            None
+         | Univ  (_,uf)    -> _SomeSome (simplify (sofar hk uf))
+         | Bfr   (_,_,bf)  -> _SomeSome (simplify (sofar hk bf))
+         | Fandw (_,ef)    -> _SomeSome (simplify (sofar hk ef))
+         | Since (_,_,p,q) -> _SomeSome (simplify (conjoin [sofar hk p; fandw hk (ouat None hk q)]))
+         | Sofar (_,sf')   -> _SomeSome (simplify (sofar hk sf'))
+         | _               -> check_barring sf;
+                              None
         )
     (* Ouat isn't since and doesn't cross threads, so doesn't get treated here *)
     | _ -> None
@@ -337,7 +341,7 @@ let allthreads f =
   conjoin (Array.to_list (Array.init !Thread.threadcount (fun i -> threaded i f)))
   
 let ur_event () = 
-  let event = ouat NoHook barrier_event_formula in
+  let event = ouat None NoHook barrier_event_formula in
   allthreads event
   
 (* *********************************** embedding ************************************** *)
@@ -462,7 +466,7 @@ let embed bcxt cxt orig_f =
   let rec tsf bounds situation (tidf:formula) (hiopt:Name.name option) (nowf:formula->formula) bcxt cxt f = 
     let noisy = !Settings.verbose_modality in
     (* if noisy then Printf.printf "\ntsf formula is %s" (string_of_formula f); *)
-    let formula_of_hat ht = 
+    let formula_of_hatopt ht = 
       match ht with 
       | None      -> tidf
       (* tildes and hats don't occur in the same query *)
@@ -501,7 +505,7 @@ let embed bcxt cxt orig_f =
       | Some ht, NoHook ->
           _recFint_of_int (tn_of_hat ht), hi_of_hat ht
       | _               ->
-          formula_of_hat ht, hiformula_of_ep hk
+          formula_of_hatopt ht, hiformula_of_ep hk
       in
       let vtype = if v=barrier_event_name then Bool else bcxt <@@> f in
       embedvariable cxt tidf epf v vtype
@@ -534,7 +538,8 @@ let embed bcxt cxt orig_f =
         let cxt, f2 = anyway2 (opttsf bounds situation tidf hiopt nowf bcxt) cxt f2 in
         let cxt, f = embedcoherence cxt v (bcxt <@@> f) f1 f2 in
         Some (cxt, Some f)
-    | Since (hk, f1, f2) ->
+    | Since (ht, hk, f1, f2) ->
+        let tidf = formula_of_hatopt ht in
         let hi = match hiopt with
                  | None    -> history_index_name 
                  | Some hi -> new_name history_index_name 
@@ -622,7 +627,8 @@ let embed bcxt cxt orig_f =
           bindForall (NameSet.singleton hi) (_recImplies (_recLessEqual hi_formula now) sf)
         in
         Some (cxt, Some (bindallthreads tid_name since_always))
-    | Ouat (hk, sf) ->
+    | Ouat (ht, hk, sf) ->
+        let tidf = formula_of_hatopt ht in
         (* exists time (not sf) *)
         let hi = match hiopt with
                  | None    -> history_index_name 

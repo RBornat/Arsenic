@@ -675,8 +675,8 @@ let check_coincidence_bu binders f =
 (* Sofar doesn't cause any transmission, so it's probably ok. *)
 let check_coincidence_formula binders =
   Formula.fold (fun () subf -> match subf.fnode with
-                               | Bfr (hk, _)
-                               | Univ (hk, _) -> check_coincidence_bu binders subf;
+                               | Bfr (_,_, _)
+                               | Univ  (_, _) -> check_coincidence_bu binders subf;
                                                  Some ()
                                | _            -> None
                )

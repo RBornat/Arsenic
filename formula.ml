@@ -40,15 +40,16 @@ type formula = {fpos: sourcepos; fnode: formulanode}
   | Ite          of formula * formula * formula (* Ite only in assertions, people! *)
   | Binder       of bkind * name * formula      (* name must not be var -- I don't know how to police this *)
   | Tuple        of formula list
-  
-  | Since        of hooking * formula * formula    
-  | Bfr          of hooking * formula                              
+  (* the three single-thread modalities can be hatted *)
+  | Since        of hatting option * hooking * formula * formula    
+  | Bfr          of hatting option * hooking * formula                              
+  | Ouat         of hatting option * hooking * formula   
+  (* the three (counting Fandw) universal modalities can't be hatted *)
   | Univ         of hooking * formula 
+  | Sofar        of hooking * formula              
   (* I can't deal with latest at the moment. Too busy simplifying for v1.1. RB 09/08/2016
       | Latest       of hatting * hooking * var                  (* global function; hatting _only_ for InflightHat *)
    *)
-  | Sofar        of hooking * formula              
-  | Ouat         of hooking * formula              
   
   | Cohere       of var * formula * formula             (* it's a global relation ... but embedding is subtle *)
   
@@ -59,7 +60,7 @@ type formula = {fpos: sourcepos; fnode: formulanode}
                                            of askZ3 in the embedding of stuff.
                                            Don't use otherwise without thinking _hard_.
                                          *)
-  | Threaded of threadid * formula (* for use when playing inter-thread games. *) 
+  | Threaded of threadid * formula (* ONLY for use when playing inter-thread games, e.g. in PMS. *) 
 
 and hatting = Hat | DHat | Tilde | DTilde
 
@@ -96,7 +97,7 @@ let is_Tildehatting = function
 let _Fint      i           = Fint i
 let _Fbool     b           = Fbool b
 let _Freg      fr          = Freg fr
-let _Fvar      pl hk v     = Fvar (pl,hk,v)
+let _Fvar      ht hk v     = Fvar (ht,hk,v)
 let _Flogc     n           = Flogc n
 
 let _Fname     n           = if Name.is_anyreg n then Freg n else 
@@ -119,18 +120,17 @@ let _Forall    n f         = Binder (Forall,n,f)
 let _Exists    n f         = Binder (Exists,n,f)
 let _Tuple     fs          = Tuple fs
 let _Ite       cf tf ef    = Ite (cf,tf,ef)
-let _Bfr       hk f        = Bfr (hk,f)
-let _U         hk f        = Univ (hk,f)
-let _Univ                  = _U
+let _Bfr       ht hk f     = Bfr (ht,hk,f)
+let _Since     ht hk f1 f2 = Since (ht,hk,f1,f2)
+let _Ouat      ht hk f     = Ouat (ht,hk,f)
+let _Univ      hk f        = Univ (hk,f)
 let _Fandw     hk f        = Fandw (hk,f)
-let _Since     hk f1 f2    = Since (hk,f1,f2)
-let _App       n fs        = App (n,fs)
 let _Sofar     hk f        = Sofar (hk,f)
-let _Ouat      hk f        = Ouat (hk,f)
+let _App       n fs        = App (n,fs)
 let _Cohere    v f1 f2     = Cohere (v,f1,f2)
 let _Threaded  tid f       = Threaded (tid,f)
 
-(* let _Latest    pl hk v     = Latest (pl,hk,v) *)
+(* let _Latest    ht hk v     = Latest (ht,hk,v) *)
 
 (* let _At_int i = At_int i *)
 
@@ -187,20 +187,20 @@ let _recForall = _recBinder Forall
 
 let _recTuple = _frec <.> _Tuple
 
-let _recSince = _frec <...> _Since 
+let _recBfr = _frec <...> _Bfr
 
-let _recBfr = _frec <..> _Bfr
+let _recOuat = _frec <...> _Ouat
+   
+let _recSince = _frec <....> _Since 
 
+let _recSofar = _frec <..> _Sofar
+   
 let _recUniv = _frec <..> _Univ
 
 let _recFandw = _frec <..> _Fandw
 
 let _recApp = _frec <..> _App
 
-let _recSofar = _frec <..> _Sofar
-   
-let _recOuat = _frec <..> _Ouat
-   
 let _recCohere = _frec <...> _Cohere
 
 let _recThreaded = _frec <..> _Threaded
@@ -243,19 +243,19 @@ let rplacForall f = rplacBinder f Forall
 
 let rplacTuple f = rplac_fnode f <.> _Tuple
 
-let rplacBfr f = rplac_fnode f <..> _Bfr
+let rplacBfr f = rplac_fnode f <...> _Bfr
+
+let rplacOuat f  = rplac_fnode f <...> _Ouat
+
+let rplacSince f = rplac_fnode f <....> _Since
 
 let rplacUniv f = rplac_fnode f <..> _Univ
 
 let rplacFandw f = rplac_fnode f <..> _Fandw
 
-let rplacSince f = rplac_fnode f <...> _Since
-
 let rplacApp f = rplac_fnode f <..> _App
 
 let rplacSofar f  = rplac_fnode f <..> _Sofar
-
-let rplacOuat f  = rplac_fnode f <..> _Ouat
 
 let rplacThreaded f = rplac_fnode f <..> _Threaded
 
@@ -332,11 +332,18 @@ let negate f = match f.fnode with
   | Not   f -> f
   | _       -> rplacNot f f
 
-let before hk f = match f.fnode with
-  | Bfr _ -> f
-  | _     -> rplacBfr f hk f
+let before ht hk f = match f.fnode with
+  | Bfr (ht',hk',_) 
+    when ht=ht' && hk=hk'  -> f
+  | _                      -> rplacBfr f ht hk f
 
-let since hk f1 f2 = fadorn (spos_of_sposspos f1.fpos f2.fpos) (Since (hk,f1,f2))
+let ouat ht hk f = match f.fnode with
+  | Ouat (ht',hk',_) 
+    when ht=ht' && hk=hk' -> f
+  | Fbool _               -> f
+  | _                     -> rplacOuat f ht hk f
+
+let since ht hk f1 f2 = fadorn (spos_of_sposspos f1.fpos f2.fpos) (Since (ht,hk,f1,f2))
 
 let rec universal hk f = match f.fnode with
   | Fbool true  -> f
@@ -354,12 +361,6 @@ let sofar hk f = match f.fnode with
     when hk=hk' -> f
   | Fbool _     -> f
   | _           -> rplacSofar f hk f
-
-let ouat hk f = match f.fnode with
-  | Ouat (hk',_) 
-    when hk=hk' -> f
-  | Fbool _     -> f
-  | _           -> rplacOuat f hk f
 
 let threaded atf f = rplacThreaded f atf f 
 
@@ -512,10 +513,6 @@ let string_of_bkind = function
   | Forall -> "Forall"
   | Exists -> "Exists"
  
-let string_of_infixSince = function
-  | true  -> " " ^ since_token ^ " "
-  | false -> " (-)" ^ since_token ^ " "
-
 let hook_token = "(-)"
 
 let hat_token = "(^)"
@@ -527,7 +524,7 @@ let string_of_hk = function
   | NoHook -> ""
   | Hook -> hook_token
   
-let string_of_pl = function
+let string_of_ht = function
   | None        -> ""
   | Some Hat    -> hat_token
   | Some DHat   -> dhat_token
@@ -537,15 +534,12 @@ let string_of_pl = function
 let string_of_prefixSofar hk = 
   string_of_hk hk ^ m_Sofar_token
   
-let string_of_prefixOuat hk = 
-  string_of_hk hk ^ m_Ouat_token
-  
 let rec string_of_primary f = 
   match f.fnode with
   | Fint   i               -> i
   | Fbool  b               -> string_of_bool b
   | Freg   r               -> string_of_reg r
-  | Fvar   (pl,hk,v)       -> string_of_pl pl ^ string_of_hk hk ^ Name.string_of_var v
+  | Fvar   (ht,hk,v)       -> string_of_ht ht ^ string_of_hk hk ^ Name.string_of_var v
   | Flogc  n               -> string_of_logc n
   | Negarith f'            -> "-" ^ string_of_primary f'
   | Not    f'              -> "!" ^ string_of_primary f'
@@ -553,17 +547,17 @@ let rec string_of_primary f =
                                              (string_of_formula cf)
                                              (string_of_formula tf)
                                              (string_of_formula ef)
-  | Fandw  (hk,f)          -> string_of_hk hk ^ m_Fandw_token ^ bracketed_string_of_formula f
-  | Bfr    (hk,f)          -> string_of_hk hk ^ m_Bfr_token ^ bracketed_string_of_formula f
+  | Bfr    (ht,hk,f)       -> string_of_ht ht ^ string_of_hk hk ^ m_Bfr_token ^ bracketed_string_of_formula f
+  | Ouat   (ht,hk,f)       -> string_of_ht ht ^ string_of_hk hk ^ m_Ouat_token ^ bracketed_string_of_formula f
   | Univ   (hk,f)          -> string_of_hk hk ^ m_Univ_token ^ bracketed_string_of_formula f
+  | Cohere (v,f1,f2)       -> cohere_token ^ "(" ^ string_of_var v ^ "," ^ string_of_args [f1;f2] ^ ")"
+  | Fandw  (hk,f)          -> string_of_hk hk ^ m_Fandw_token ^ bracketed_string_of_formula f
   | Binder (bk, n, f)      -> let ns, f = multibind bk [n] f in
                               string_of_bkind bk ^ "(" ^ 
                               string_of_list string_of_name "," ns ^ ")" ^ 
                               bracketed_string_of_formula f
   | App (n,fs)             -> string_of_name n ^ "(" ^ string_of_args fs ^ ")"
   | Sofar (hk,f)           -> string_of_prefixSofar hk ^ bracketed_string_of_formula f
-  | Ouat  (hk,f)           -> string_of_prefixOuat hk ^ bracketed_string_of_formula f
-  | Cohere (v,f1,f2)       -> cohere_token ^ "(" ^ string_of_var v ^ "," ^ string_of_args [f1;f2] ^ ")"
   (* 
     | Latest (hk,v)          -> string_of_hk hk ^ m_Latest_token ^ "(" ^ string_of_var v ^ ")"
    *)
@@ -612,9 +606,9 @@ and string_of_formula f =
        | Some (_,_,cseq)        -> string_of_cseq cseq
        | None                   -> string_of_binary_formula left right (string_of_logop     lop) (logprio lop)
       ) 
-  | Since (NoHook, left, right) -> string_of_binary_formula left right (" " ^ since_token ^ " ") (formulaprio f)
-  | Since (hk, left, right)     -> string_of_hk hk ^ 
-                                   bracketed_string_of_formula {f with fnode=Since(NoHook,left,right)}
+  | Since (None, NoHook, left, right) -> string_of_binary_formula left right (" " ^ since_token ^ " ") (formulaprio f)
+  | Since (ht, hk, left, right)       -> string_of_ht ht ^ string_of_hk hk ^ 
+                                         bracketed_string_of_formula {f with fnode=Since(None,NoHook,left,right)}
   | Threaded (tid,tf)           -> string_of_binary_formula tf (formula_of_threadid tid) m_atthread_token (formulaprio f)
   | Tuple fs                    -> string_of_args fs
 
@@ -726,7 +720,7 @@ let indented_string_of_formula just_log indent f =
       | LogArith     _         -> false
       (* these come apart if their insides come apart *)
       | Not                  f -> one_liner f
-      | Bfr              (_,f) -> one_liner f
+      | Bfr            (_,_,f) -> one_liner f
       | Univ             (_,f) -> one_liner f
       | Fandw            (_,f) -> one_liner f
       (* these come apart if their insides come apart, or if they are too wide *)
@@ -734,9 +728,9 @@ let indented_string_of_formula just_log indent f =
       | Tuple               fs -> List.for_all one_liner fs && ok_width ()
       | Ite         (cf,tf,ef) -> List.for_all one_liner [cf;ef;tf] && ok_width ()
       | App             (n,fs) -> List.for_all one_liner fs && ok_width () 
-      | Since        (_,f1,f2) -> one_liner f1 && one_liner f2 && ok_width ()
+      | Ouat           (_,_,f) -> one_liner f && ok_width ()
+      | Since      (_,_,f1,f2) -> one_liner f1 && one_liner f2 && ok_width ()
       | Sofar            (_,f) -> one_liner f && ok_width ()
-      | Ouat             (_,f) -> one_liner f && ok_width ()
       | Cohere       (_,f1,f2) -> one_liner f1 && one_liner f2 && ok_width ()
       | Threaded         (_,f) -> one_liner f && ok_width ()
     and padded_prefix opstr = opstr ^ " " 
@@ -822,8 +816,8 @@ let indented_string_of_formula just_log indent f =
       | Arith    (left, aop, right) -> isb left right (string_of_arithop   aop) (arithprio aop)
       | Compare  (left, cop, right) -> isb left right (string_of_compareop cop) (compprio  cop)
       | LogArith (left, lop, right) -> isb left right (string_of_logop     lop) (logprio   lop)
-      | Since (NoHook, left, right) -> isb left right (" " ^ since_token ^ " ") (formulaprio f)
-      | Since (hk, left, right)     -> isf_app (string_of_hk hk) [{f with fnode=Since(NoHook,left,right)}]
+      | Since (None, NoHook, left, right) -> isb left right (" " ^ since_token ^ " ") (formulaprio f)
+      | Since (ht, hk, left, right)     -> isf_app (string_of_ht ht ^ string_of_hk hk) [{f with fnode=Since(None,NoHook,left,right)}]
       | Binder (bk, n, f)           -> 
           let ns, f = multibind bk [n] f in
           let prefix = 
@@ -849,10 +843,10 @@ let indented_string_of_formula just_log indent f =
                                        in
                                        ss@["fi"], w
       | Fandw    (hk,f)             -> isf_app (string_of_hk hk ^ m_Fandw_token) [f]
-      | Bfr    (hk,f)               -> isf_app (string_of_hk hk ^ m_Bfr_token) [f]
+      | Bfr (ht,hk,f)               -> isf_app (string_of_hk hk ^ m_Bfr_token) [f]
       | Univ   (hk,f)               -> isf_app (string_of_hk hk ^ m_Univ_token) [f]
       | Sofar    (hk,f)             -> isf_app (string_of_prefixSofar hk) [f]
-      | Ouat     (hk,f)             -> isf_app (string_of_prefixOuat hk) [f]
+      | Ouat  (ht,hk,f)             -> isf_app (string_of_ht ht ^ string_of_hk hk ^ m_Ouat_token) [f]
       | Cohere (v,f1,f2)            -> isf_app cohere_token [_recFname v; f1; f2]
       | Threaded (tid,tf)           -> isb tf (formula_of_threadid tid) " @ " (formulaprio f)
   in
@@ -885,14 +879,14 @@ let optexists (optp: formula -> 'a option) f =
       | Binder    (_,n,f)     -> ef f (* really: catch it in p if you are implementing binders *)
       | Tuple     fs          -> optfirst ef fs
       | Ite       (cf,f1,f2)  -> optfirst ef [cf;f1;f2]
-      | Since     (_,f1,f2)   -> optfirst ef [f1;f2]
-      | Bfr       (_,f)       -> ef f
+      | Bfr       (_,_,f)     -> ef f
+      | Ouat      (_,_,f)     -> ef f
+      | Since     (_,_,f1,f2) -> optfirst ef [f1;f2]
       | Univ      (_,f)       -> ef f
+      | Sofar     (_,f)       -> ef f
       (*  | Latest    _           -> None *)
       | Fandw     (_,f)       -> ef f
       | App       (_,fs)      -> optfirst ef fs (* really: catch it in p if n matters *)
-      | Sofar     (_,f)       -> ef f
-      | Ouat      (_,f)       -> ef f
       | Cohere    (_,f1,f2)   -> optfirst ef [f1;f2] (* catch v in p if it matters *)
       | Threaded  (_,f)       -> ef f
     )
@@ -921,14 +915,14 @@ let optfold (optp: 'a -> formula -> 'a option) x =
         | Binder    (_,n,f)     -> ofold x f (* really!: catch it in optp if you are doing binders *)
         | Tuple     fs          -> optfold ofold x fs
         | Ite       (cf,tf,ef)  -> optfold ofold x [cf;tf;ef]
-        | Since     (_,f1,f2)   -> optfold ofold x [f1;f2]
-        | Bfr       (_,f)       -> ofold x f
+        | Since     (_,_,f1,f2) -> optfold ofold x [f1;f2]
+        | Bfr       (_,_,f)     -> ofold x f
+        | Ouat      (_,_,f)     -> ofold x f
         | Univ      (_,f)       -> ofold x f
+        | Sofar     (_,f)       -> ofold x f
         (* | Latest    _           -> None *)
         | Fandw     (_,f)       -> ofold x f
         | App       (n,fs)      -> optfold ofold x fs (* really!: catch the appname in optp if n matters *)
-        | Sofar     (_,f)       -> ofold x f
-        | Ouat      (_,f)       -> ofold x f
         | Cohere    (_,f1,f2)   -> optfold ofold x [f1;f2] (* catch v in optp if it matters *)
         | Threaded  (_,f)       -> ofold x f
     )
@@ -963,14 +957,14 @@ let optmap ff f =
                      | Binder   (bk,n,f)     -> trav f &~~ take1 (_Binder bk n)
                      | Tuple    fs           -> optmap_any trav fs &~~ take1 _Tuple
                      | Ite      (cf,tf,ef)   -> trav3 cf tf ef &~~ take3 _Ite
-                     | Since    (hk,f1,f2)   -> trav2 f1 f2 &~~ take2 (_Since hk)
-                     | Bfr      (hk,f)       -> trav f &~~ take1 (_Bfr hk)
+                     | Bfr      (ht,hk,f)    -> trav f &~~ take1 (_Bfr ht hk)
+                     | Ouat     (ht,hk,f)    -> trav f &~~ take1 (_Ouat ht hk)
+                     | Since    (ht,hk,f1,f2)-> trav2 f1 f2 &~~ take2 (_Since ht hk)
                      | Univ     (hk,f)       -> trav f &~~ take1 (_Univ hk)
+                     | Sofar    (hk,f)       -> trav f &~~ take1 (_Sofar hk)
                      (* | Latest   _            -> None *)
                      | Fandw    (hk,f)       -> trav f &~~ take1 (_Fandw hk)
                      | App      (n,fs)       -> optmap_any trav fs &~~ take1 (_App n)
-                     | Sofar    (hk,f)       -> trav f &~~ take1 (_Sofar hk)
-                     | Ouat     (hk,f)       -> trav f &~~ take1 (_Ouat hk)
                      | Cohere   (v,f1,f2)    -> trav2 f1 f2 &~~ take2 (_Cohere v)
                      | Threaded (i,f)        -> trav f &~~ take1 (_Threaded i) 
     and trav2 f1 f2 = optionpair_either trav f1 trav f2
@@ -1031,14 +1025,14 @@ let optmapfold ff x f =
                        | Binder    (bk,n,f)   -> unary f (_recBinder bk n)
                        | Tuple     fs         -> nary fs _recTuple
                        | Ite       (cf,tf,ef) -> ternary cf tf ef _recIte
-                       | Since     (hk,f1,f2) -> binary f1 f2 (_recSince hk)
-                       | Bfr       (hk,f)     -> unary f (_recBfr hk)
+                       | Bfr       (ht,hk,f)  -> unary f (_recBfr ht hk)
+                       | Ouat      (ht,hk,f)  -> unary f (_recOuat ht hk)
+                       | Since     (ht,hk,f1,f2) -> binary f1 f2 (_recSince ht hk)
                        | Univ      (hk,f)     -> unary f (_recUniv hk)
-                       (* | Latest    _          -> x,None *)
-                       | Fandw     (hk,f)     -> unary f (_recFandw hk)
-                       | App       (n,fs)     -> nary fs (_recApp n)
                        | Sofar     (hk,f)     -> unary f (_recSofar hk)
-                       | Ouat      (hk,f)     -> unary f (_recOuat hk)
+                       | Fandw     (hk,f)     -> unary f (_recFandw hk)
+                       (* | Latest    _          -> x,None *)
+                       | App       (n,fs)     -> nary fs (_recApp n)
                        | Cohere    (v,f1,f2)  -> binary f1 f2 (_recCohere v)
                        | Threaded  (tid,f)    -> unary f (_recThreaded tid) 
   in
@@ -1118,17 +1112,21 @@ let subst_clean f =
   let rec bad f =
     exists (fun f ->
               match f.fnode with
-              | Fvar (None, NoHook, _) -> false
-              | Fvar                 _ -> true
-              | Bfr       (NoHook, bf) -> bad bf
-              | Bfr                  _ -> true
-              | Univ      (NoHook, uf) -> bad uf
-              | Univ                 _ -> true
-              | Fandw     (NoHook, ef) -> bad ef
-              | Fandw                _ -> true
-              | Since (NoHook, f1, f2) -> bad f1 || bad f2
-              | Since                _ -> true
-              | _                      -> false
+              | Fvar (None, NoHook, _)   -> false
+              | Fvar                   _ -> true
+              | Bfr       (_,NoHook, bf) -> bad bf
+              | Bfr                    _ -> true
+              | Ouat      (_,NoHook, bf) -> bad bf
+              | Ouat                   _ -> true
+              | Since (_,NoHook, f1, f2) -> bad f1 || bad f2
+              | Since                  _ -> true
+              | Univ        (NoHook, uf) -> bad uf
+              | Univ                   _ -> true
+              | Sofar       (NoHook, uf) -> bad uf
+              | Sofar                  _ -> true
+              | Fandw       (NoHook, ef) -> bad ef
+              | Fandw                  _ -> true
+              | _                       -> false
            )
            f
   in
@@ -1141,14 +1139,16 @@ let is_hatted f = (* maybe this needs to look inside modalities ... *)
 
 let is_hooked f =
   match f.fnode with
-  | Fvar      (_, Hook, _) 
-  | Since     (Hook, _, _)        
-  | Bfr       (Hook, _)                  
-  | Sofar     (Hook, _)    
-  | Ouat      (Hook, _)    
+  | Fvar    (_, Hook, _) 
+  | Bfr      (_,Hook, _)                  
+  | Ouat     (_,Hook, _)    
+  | Since (_,Hook, _, _)        
+  | Univ       (Hook, _)    
+  | Sofar      (Hook, _)    
+  | Fandw      (Hook, _)    
   (* | Latest    (Hook, _) *)
-                            -> true
-  | _                       -> false
+                         -> true
+  | _                    -> false
 
 (* *********************** free names ******************************* *)
 

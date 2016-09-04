@@ -373,25 +373,28 @@
     | (loc,n)::locnames -> let f = makebinder bindf locnames f in
                            Formula.fadorn (spos_of_sposspos loc f.fpos) (bindf n f)
                            
-  let no_hats pl f =
-    match pl with 
+  let no_hats ht f =
+    match ht with 
     | None -> f
-    | _    -> bad ("can't apply " ^ string_of_pl pl ^ " to (" ^ string_of_formula f ^ ")")
+    | _    -> bad ("can't apply " ^ string_of_ht ht ^ " to (" ^ string_of_formula f ^ ")")
 
 
-  let tcep_apply pl wh f =
+  let tcep_apply ht hk f =
     let wrong s =
       bad ("can't apply " ^ s ^ " to (" ^ string_of_formula f ^ ")")
     in
     match f.fnode with
-    | Fvar  (None,NoHook,v)  -> {f with fnode=Fvar (pl,wh,v)}
-    | Since (NoHook,f1,f2)   -> no_hats pl {f with fnode=Since(wh,f1,f2)}
-    | Bfr   (NoHook,bf)      -> no_hats pl {f with fnode=Bfr(wh,bf)}
-    | Univ  (NoHook,uf)      -> no_hats pl {f with fnode=Univ(wh,uf)}
-    | _                      -> (match pl,wh with
-                                 | None, NoHook -> f
-                                 | _            -> wrong (string_of_pl pl ^ string_of_hk wh)
-                                )
+    | Fvar  (None,NoHook,v)     -> {f with fnode=Fvar (ht,hk,v)}
+    | Since (None,NoHook,f1,f2) -> {f with fnode=Since(ht,hk,f1,f2)}
+    | Bfr   (None,NoHook,bf)    -> {f with fnode=Bfr(ht,hk,bf)}
+    | Ouat  (None,NoHook,bf)    -> {f with fnode=Bfr(ht,hk,bf)}
+    | Univ  (NoHook,uf)         -> no_hats ht {f with fnode=Univ(hk,uf)}
+    | Sofar (NoHook,sf)         -> no_hats ht {f with fnode=Sofar(hk,sf)}
+    | Fandw (NoHook,ff)         -> no_hats ht {f with fnode=Fandw(hk,ff)}
+    | _                         -> (match ht,hk with
+                                    | None, NoHook -> f
+                                    | _            -> wrong (string_of_ht ht ^ string_of_hk hk)
+                                   )
       
   let check_knot knot =
     let badknot () = bad (Knot.alt_token ^ "may only appear at top level of a knot") in
@@ -921,16 +924,16 @@ primary:
   | LPAR formula RPAR                   {$2}
   | MINUS primary                       {fadorn(Negarith($2))} 
   | NOT primary                         {fadorn(Not($2))}
-  | tcep SOFAR LPAR formula RPAR        {let pl, wh = $1 in
-                                         no_hats pl (fadorn (Sofar (wh, $4)))
+  | tcep SOFAR LPAR formula RPAR        {let ht, hk = $1 in
+                                         no_hats ht (fadorn (Sofar (hk, $4)))
                                         }
-  | tcep OUAT LPAR formula RPAR         {let pl, wh = $1 in
-                                         no_hats pl (fadorn (ouat wh $4).fnode)
+  | tcep OUAT LPAR formula RPAR         {let ht, hk = $1 in
+                                         fadorn (Ouat(ht,hk,$4))
                                         }
   | tcep LATEST LPAR latestname RPAR   
-                                        { bad "latest not supported (yet, again). Sorry"(*;
-                                          let pl, wh = $1 in
-                                          fadorn (Latest (pl,wh,$4)) *)
+                                        { bad "latest not supported (yet). Sorry"(*;
+                                          let ht, hk = $1 in
+                                          fadorn (Latest (ht,hk,$4)) *)
                                         }
 /*
   | time USOFAR LPAR formula RPAR      {fadorn (Univ ($1, fadorn (Sofar (NoHook, $4))))}
@@ -965,8 +968,8 @@ primary:
                                               bad ("undefined macro " ^ string_of_name $1)
                                         }
   
-  | tcep BFR LPAR formula RPAR          {let pl, wh = $1 in
-                                         no_hats pl (fadorn (Bfr (wh,$4)))
+  | tcep BFR LPAR formula RPAR          {let ht, hk = $1 in
+                                         fadorn (Bfr (ht,hk,$4))
                                         }
   | time UNIV LPAR formula RPAR         {fadorn (Univ ($1,$4))}
   | time FANDW LPAR formula RPAR        {if !Settings.allow_special_formulas then fadorn (Fandw ($1,$4))
@@ -1052,7 +1055,7 @@ formula:
   | formula IFF formula                 {fadorn(LogArith($1,Iff,$3))}
   | formula IMPLIES formula             {fadorn(LogArith($1,Implies,$3))}
 
-  | formula SINCE formula               {fadorn (Since(NoHook,$1,$3))} /* place, time done elsewhere */
+  | formula SINCE formula               {fadorn (Since(None,NoHook,$1,$3))} /* place, time done before enclosing bracket */
   
   | formula COMMA formulas              {fadorn(Tuple($1::$3))}
 

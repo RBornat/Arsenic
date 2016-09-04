@@ -155,8 +155,8 @@ let rec typeassign_formula cxt bcxt t f =
          List.remove_assoc s cxt,       (* remove the outermost one *)
          bcxt 
      | Sofar            (_,f) 
-     | Ouat             (_,f) -> unary cxt bcxt Bool Bool f
-     | Since        (_,f1,f2) -> binary cxt bcxt Bool Bool Bool f1 f2
+     | Ouat           (_,_,f) -> unary cxt bcxt Bool Bool f
+     | Since      (_,_,f1,f2) -> binary cxt bcxt Bool Bool Bool f1 f2
      | Ite         (cf,tf,ef) -> ternary cxt bcxt t Bool t t cf tf ef
      | Cohere (v,f1,f2)       -> let cxt = unifytype cxt t Bool in
                                  let cxt, tv = typeassign_var cxt v in
@@ -170,7 +170,7 @@ let rec typeassign_formula cxt bcxt t f =
          List.fold_left utaf 
                         (assigntype cxt (FuncType(ts,t)) (string_of_name n), bcxt) 
                         (List.combine ts fs)
-     | Bfr      ( _, bf)    -> unary cxt bcxt Bool Bool bf
+     | Bfr      (_,_,bf)    -> unary cxt bcxt Bool Bool bf
      | Univ        (_,f)    -> unary cxt bcxt Bool Bool f
      | Fandw       (_,f)    -> unary cxt bcxt Bool Bool f
      | Threaded(_,f)        -> typeassign_formula cxt bcxt t f

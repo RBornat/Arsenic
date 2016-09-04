@@ -237,14 +237,17 @@ let z3check_query question task noisy assertions query =
     let count_threads (n,stabq) f =
       match f.fnode with
       | Threaded (i, _)     -> Some (Pervasives.max n (i+1), false)
-      | Fvar (Some h, _, _) -> let i = Modality.tn_of_hat h in
-                               Some (Pervasives.max n (i+1),true)
+      | Fvar  (Some h, _, _) 
+      | Since (Some h, _, _, _)
+      | Bfr   (Some h, _, _)
+      | Ouat  (Some h, _, _) -> let i = Modality.tn_of_hat h in
+                                Some (Pervasives.max n (i+1),true)
       | Fvar  (_, Hook, _)
-      | Since (Hook, _, _)
-      | Bfr      (Hook, _)
+      | Since (_,Hook, _, _)
+      | Bfr    (_,Hook, _)
+      | Ouat   (_,Hook, _)
       | Univ     (Hook, _)
       | Sofar    (Hook, _)
-      | Ouat     (Hook, _)
       | Fandw    (Hook, _) -> Some (n, true)
       | _                  -> None
     in

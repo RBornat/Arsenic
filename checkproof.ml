@@ -739,8 +739,8 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
         | Lo 
         | Go -> _recImplies sourcepost bassert
         | Bo -> modalq sourcepost 
-                       (fun f -> match f.fnode with Bfr (NoHook,f) -> Some f | _ -> None)
-                       (_recBfr NoHook) 
+                       (fun f -> match f.fnode with Bfr (None,NoHook,f) -> Some f | _ -> None)
+                       (_recBfr None NoHook) 
                        bassert
         | Uo -> modalq sourcepost
                        (fun f -> match f.fnode with Univ (NoHook,f) -> Some f | _ -> None)
