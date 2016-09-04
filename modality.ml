@@ -510,7 +510,7 @@ let embed bcxt cxt orig_f =
     | Fvar (_,_,v) 
        when Stringutils.ends_with v "&new" -> (* x!new isn't really a variable, doesn't have a history *)
         None
-    | Fvar (ht,hk,v) -> (* I don't think we need special treatment of bound variables: they won't be hatted or hooked *)
+    | Fvar (ht,hk,v) -> (* We don't need special treatment of bound variables: they may even be hatted (but not hooked )*)
         let cxt, vv = process_var cxt ht hk v f in
         Some (cxt, Some vv)
     (* | Latest (ht,hk,v) -> 
@@ -529,11 +529,11 @@ let embed bcxt cxt orig_f =
          | _           -> None
         ) 
         &~~ (fun f -> Some (cxt, Some f))
-    (*| Cohere (v, f1, f2) ->
+    | Cohere (v, f1, f2) ->
         let cxt, f1 = anyway2 (opttsf bounds situation tidf hiopt nowf bcxt) cxt f1 in
         let cxt, f2 = anyway2 (opttsf bounds situation tidf hiopt nowf bcxt) cxt f2 in
         let cxt, f = embedcoherence cxt v (bcxt <@@> f) f1 f2 in
-        Some (cxt, Some f)*)
+        Some (cxt, Some f)
     | Since (hk, f1, f2) ->
         let hi = match hiopt with
                  | None    -> history_index_name 
