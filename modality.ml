@@ -593,7 +593,7 @@ let embed nowf bcxt cxt orig_f = (* note binding of nowf *)
             )
         in
         Some (cxt, Some since_assert)
-    | Sofar (hk, sf) ->
+    | Sofar (NoHook, sf) ->
         (* forall threads forall time sf *)
         let hi = match hiopt with
                  | None    -> history_index_name 
@@ -601,10 +601,18 @@ let embed nowf bcxt cxt orig_f = (* note binding of nowf *)
         in
         let hi_formula = _recFname hi in
         let tid_formula = _recFname tid_name in
-        let now = if hk=Hook then hooked_now else nowf tid_formula in 
-        let cxt, sf = anyway2 (opttsf bounds (InSofar sf) tid_formula (Some hi) (new_nowf hi_formula) bcxt) cxt sf in
+        let now = hinowf tid_formula in 
+        let cxt, sf = anyway2 (opttsf bounds (InSofar sf) tid_formula (Some hi) (new_himaxf hi_formula) bcxt) cxt sf in
         let since_always = 
-          bindForall (NameSet.singleton hi) (_recImplies (_recLessEqual hi_formula now) sf)
+          bindForall (NameSet.singleton hi) 
+                     (_recImplies (conjoin [_recLessEqual himin_formula hi_formula;     (* can't go before beginning *)
+                                            _recLessEqual hi_formula now; 
+                                            _recLessEqual hi_formula (nowf tid_formula) (* can't go past 'now' *)
+                                           ]
+                                  )
+                                  sf;
+                                
+                     )
         in
         Some (cxt, Some (bindallthreads tid_name since_always))
     | Ouat (ht, hk, sf) ->
@@ -649,6 +657,7 @@ let embed nowf bcxt cxt orig_f = (* note binding of nowf *)
         in
         Some (cxt, Some tf')
     | Since (ht, hk, f1, f2) -> roundagain ht hk (rplacSince f None NoHook f1 f2)
+    | Sofar (hk, sf)         -> roundagain None hk (rplacSofar f NoHook sf)
     | Fandw (hk,ef)          -> roundagain None hk (rplacFandw f NoHook ef)
     | Bfr  _ 
     | Univ _ ->
