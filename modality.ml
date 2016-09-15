@@ -301,10 +301,18 @@ let rec simplify f =
                         so does the 'new' way below. And at least this one aligns the boundary
                         events, which is a reasonable abstraction. Aligning them properly with
                         the 'new' treatment would be a bit scary. I might attempt it one day.
+                        
+                        This reading has an effect on Since and Fandw embeddings: P since bev
+                        ensures that bev must happen before state 1; fandw P means across threads
+                        except in state 1. So fandw must be applied _inside_ an hi quantification.
+                        
+                        This reading does permit a proper reading of (U(P) since Q),
+                        which really has to be (U(P) since (bev which is before Q). I haven't 
+                        worked out how to do that.
                       *)
-                     Some (Some (simplify (since None hk (simplify (fandw NoHook uf)) barrier_event_formula)))
+                     _SomeSome (simplify (since None hk (simplify (fandw NoHook uf)) barrier_event_formula))
                      (* the 'new way
-                        Some (Some (fandw hk (simplify (since None NoHook uf barrier_event_formula))))
+                        _SomeSome (fandw hk (simplify (since None NoHook uf barrier_event_formula)))
                       *)
                   )
         )
@@ -479,9 +487,26 @@ let embed nowf bcxt cxt orig_f = (* note binding of nowf *)
     in
     let hi_of_ep hk =
       match hk with Hook -> hooked_now | _ -> nowf tidf
+    let new_himaxf f _ = f in
+    let tidf_and_himaxf ht hk =
+      let tidf = match ht with 
+                 | None    -> tidf 
+                 | Some ht -> _recFint_of_int (match ht with
+                                               | Hat  | Tilde  -> 1
+                                               | DHat | DTilde -> 2
+                                              )
+      in
+      let hinowf = match hk with
+                   | NoHook -> hinowf
+                   | Hook   -> new_himaxf hooked_now
+      in
+      tidf, hinowf
     in
     let hiformula_of_ep hk =
       either (hi_of_ep hk) (hiopt &~~ (_Some <.> _recFname))
+    let roundagain ht hk f' =
+      let tidf, hinowf = tidf_and_himaxf ht hk in
+      tsf bounds situation tidf hiopt hinowf bcxt cxt f'
     in
     let bindallthreads tidname bf = 
       let tidf = _recFname tidname in
@@ -491,16 +516,6 @@ let embed nowf bcxt cxt orig_f = (* note binding of nowf *)
       in
       bindForall (NameSet.singleton tidname) 
                  (_recImplies limits bf)
-    in
-    let tevw cxt hk ef =
-      (* Printf.printf "\ntranslating %s" (string_of_formula (_recFandw hk ef)); *)
-      let tidf' = _recFname tid_name in
-      let cxt, ef = 
-        anyway2 (opttsf bounds (InU ef) tidf' hiopt (new_nowf (hiformula_of_ep hk)) bcxt) 
-                cxt 
-                ef 
-      in 
-      Some (cxt, Some (bindallthreads tid_name ef))
     in
     if !Settings.verbose || !Settings.verbose_modality then
       Printf.printf "\nembed tidf=%s f=%s" (string_of_formula tidf) (string_of_formula f); 
@@ -646,7 +661,16 @@ let embed nowf bcxt cxt orig_f = (* note binding of nowf *)
           bindExists (NameSet.singleton hi) (_recAnd (_recLessEqual hi_formula now) sf)
         in
         Some (cxt, Some since_always)
-    | Fandw (hk,ef) -> tevw cxt hk ef
+    | Fandw (NoHook,ef) -> 
+        (* Printf.printf "\ntranslating %s" (string_of_formula (_recFandw hk ef)); *)
+        let cxt, ef1 = anyway2 (opttsf bounds (InU ef) tidf hiopt hinowf bcxt) cxt ef in 
+        let tidf' = _recFname tid_name in
+        let cxt, ef' = anyway2 (opttsf bounds (InU ef) tidf' hiopt hinowf bcxt) cxt ef in 
+        Some (cxt, Some (_recIte (_recEqual (hinowf tidf) (_recFint_of_int 1))
+                                 ef1
+                                 (bindallthreads tid_name ef')
+                        )
+             )
     | Binder (fe, v, bf) ->
         (* if Name.is_anyvar v then 
              raise (Error (Sourcepos.string_of_sourcepos f.fpos ^ ": cannot embed variable binding " ^ string_of_formula f));
@@ -664,6 +688,7 @@ let embed nowf bcxt cxt orig_f = (* note binding of nowf *)
           anyway2 (opttsf bounds situation (_recFint_of_int tid) hiopt hinowf bcxt) cxt tf        
         in
         Some (cxt, Some tf')
+    | Fandw (hk,ef)          -> roundagain None hk (rplacFandw f NoHook ef)
     | Bfr  _ 
     | Univ _ ->
         raise (Error (Printf.sprintf "Modality.embed: unsimplified %s in %s"
