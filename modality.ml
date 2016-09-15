@@ -337,7 +337,9 @@ let rec simplify f =
          | Univ  (_,uf)    -> _SomeSome (simplify (sofar hk uf))
          | Bfr   (_,_,bf)  -> _SomeSome (simplify (sofar hk bf))
          | Fandw (_,ef)    -> _SomeSome (simplify (sofar hk ef))
-         | Since (_,_,p,q) -> _SomeSome (simplify (conjoin [sofar hk p; fandw hk (ouat None hk q)]))
+         | Since (_,_,p,q) -> (* this should be sofar p and q at himin, but that's too much work *)
+                              (Formula.optmap optsimp sf &~~ (_SomeSome <.> (simplify <.> _recSofar hk))) 
+                              |~~ (fun _ -> Some None)
          | Sofar (_,sf')   -> _SomeSome (simplify (sofar hk sf'))
          | _               -> check_barring sf;
                               None
@@ -551,8 +553,8 @@ let embed nowf bcxt cxt orig_f = (* note binding of nowf *)
         let cxt, f2 = anyway2 (opttsf bounds situation tidf hiopt hinowf bcxt) cxt f2 in
         let cxt, f = embedcoherence cxt v (bcxt <@@> f) f1 f2 in
         Some (cxt, Some f)
-    | Since (ht, hk, f1, f2) ->
-        let tidf = formula_of_hatopt ht in
+    | Since (None, NoHook, f1, f2) ->
+        let barrier_since = f2=barrier_event_formula in
         let hi = match hiopt with
                  | None    -> history_index_name 
                  | Some hi -> new_name history_index_name 
@@ -563,67 +565,32 @@ let embed nowf bcxt cxt orig_f = (* note binding of nowf *)
         let hi1_formula = _recFname hi1 in
         let cxt, f1 = anyway2 (opttsf bounds (InSince f1) tidf (Some hi1) (new_himaxf hi1_formula) bcxt) cxt f1 in
         let since_assert =
-          if !Settings.simpleUBsince then
-            ((* This somewhat simpler version -- which doesn't demand a previous state -- is 
-                for some reason often 2.5 times slower ... and I honestly can't see why.
-              *)
-             let cmp_op = match hk with | NoHook -> _recLessEqual | Hook -> _recLess in
-             bindExists 
-               (NameSet.singleton hi)
-               (conjoin 
-                  [cmp_op hi_formula (nowf tidf);
-                   f2; 
-                   bindForall 
-                     (NameSet.singleton hi1) 
-                     (_recImplies 
-                        (conjoin [_recLessEqual hi_formula hi1_formula;
-                                  cmp_op hi1_formula (nowf tidf)
-                                 ]
-                        )
-                        f1
+          (* barriers _must_ have occurred in a previous state. If for nothing else, this 
+             is essential to avoid y=1/\x=(-)x => (_U(x=1) since y=1).
+           *)
+          bindExists 
+            (NameSet.singleton hi)
+            (conjoin 
+               [_recLessEqual himin_formula hi_formula;                                 (* can't go before beginning *)
+                _recLessEqual hi_formula (hinowf tidf);
+                _recLessEqual hi_formula (nowf tidf);                                   (* can't go past 'now' *)
+                (if barrier_since 
+                 then _recLess hi_formula (_recFint_of_int 1) 
+                 else _recTrue
+                );                                                                      (* can't happen in state after assignment *)
+                f2; 
+                bindForall 
+                  (NameSet.singleton hi1) 
+                  (_recImplies 
+                     (conjoin [_recLessEqual hi_formula hi1_formula;                    (* hi_formula already constrained below *)
+                               _recLessEqual hi1_formula (hinowf tidf);
+                               _recLessEqual hi1_formula (nowf tidf)                    (* can't go past 'now' *)
+                              ]
                      )
-                  ]
-               )
+                     f1
+                  )
+               ]
             )
-          else (
-            (* treating Sofar like U: think that's right *)
-            let cmp_op1, cmp_op2, limit = 
-              match situation, hk with 
-              | Amodal   , NoHook 
-              | InSince _, NoHook -> _recLessEqual, _recLessEqual, nowf tidf 
-              | InBfr _  , NoHook 
-              | InSofar _, NoHook 
-              | InOuat  _, NoHook 
-              | InU   _  , NoHook -> _recLess     , _recLessEqual, nowf tidf
-              | Amodal   , Hook   -> _recLess     , _recLess     , nowf tidf
-              | InBfr _  , Hook 
-              | InSofar _, Hook 
-              | InOuat  _, Hook 
-              | InU     _, Hook   
-              | InSince _, Hook   -> raise (Error ("hooked since inside something else " ^ (string_of_formula f)))
-                                     (* _recLess     , _recLess     , (match (nowf tidf).fnode with
-                                                                       | Fint "0" -> _recFint "-1"
-                                                                       | _        -> _recMinus (nowf tidf) (_recFint "1")
-                                                                      )
-                                      *)
-            in
-            bindExists 
-              (NameSet.singleton hi)
-              (conjoin 
-                 [cmp_op1 hi_formula limit;
-                  f2; 
-                  bindForall 
-                    (NameSet.singleton hi1) 
-                    (_recImplies 
-                       (conjoin [_recLessEqual hi_formula hi1_formula;
-                                 cmp_op2 hi1_formula (nowf tidf)
-                                ]
-                       )
-                       f1
-                    )
-                 ]
-              )
-          )
         in
         Some (cxt, Some since_assert)
     | Sofar (hk, sf) ->
@@ -681,6 +648,7 @@ let embed nowf bcxt cxt orig_f = (* note binding of nowf *)
           anyway2 (opttsf bounds situation (_recFint_of_int tid) hiopt hinowf bcxt) cxt tf        
         in
         Some (cxt, Some tf')
+    | Since (ht, hk, f1, f2) -> roundagain ht hk (rplacSince f None NoHook f1 f2)
     | Fandw (hk,ef)          -> roundagain None hk (rplacFandw f NoHook ef)
     | Bfr  _ 
     | Univ _ ->
