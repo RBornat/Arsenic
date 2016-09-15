@@ -1,14 +1,14 @@
 {aa: x=0}
 ---------------------
 guarantee [x=0 | x:=1; true | x:=2]
-{* lo aa: sofar(x=0) *}                 a: x:=1;
-{* lo a: sofar(x!=2)/\x=1 *}            b: x:=2
+{* lo aa: sofar(x=0) *}[* x=0 *]        a: x:=1;
+{* lo a: !ouat(x=2)/\x=1 *}             b: x:=2
 {* lo b: _c(x,1,2) *}
 ---------------------
 # there appears to be no way round the problem that the observation of r2 must be
-# coherence-related to the observation of r1. I have to use explicit lo.
+# lo-after the observation of r1. I have to use explicit lo.
 {* lo aa: true *}                       c: r1:=x;
 {* lo c: ouat(x=r1) *}                  d: r2:=x
 {* lo d: r1!=r2 => _c(x,r1,r2) *}
 ---------------------
-{ zz: !(1:r1=2/\ 1:r2=1) }
+{ zz: !(1:r1=2/\1:r2=1) }

@@ -7,12 +7,12 @@ guarantee [ _B(x=0) | x:=1 ]
 guarantee [ true | y:=1 ]
 
 {* lo aa: true *}                               a: r1:=x;
-{* uo a : r1=1=>_U(x=1); lo aa: sofar(y!=1) *}  b: y:=1  
+{* uo a : r1=1=>_U(x=1); lo aa: !ouat(y=1) *}   b: y:=1  
 {* lo b : r1=1=>(_U(x=1) since y=1) *}
 -------------------------
 guarantee [ true | y:=2 ]
 
-{* lo aa: sofar(y!=2) *}                        c: y:=2;
+{* lo aa: !ouat(y=2) *}                         c: y:=2;
 {* uo c : _U(y=2\/y=1/\_c(y,2,1)) *}            d: r1:=x 
 {* lo d : r1=0=>(_U(y=2\/y=1/\_c(y,2,1)) since x=0) *}
 -------------------------

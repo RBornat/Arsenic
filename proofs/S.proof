@@ -2,14 +2,15 @@
 ----------------------
 guarantee [ true | m:=1; _B(ouat(m=1)) | f:=1 ]
 
-{* lo aa: sofar(m!=1) *}                            a: m:=1;
+{* lo aa: !ouat(m=1) *}                             a: m:=1;
 {* bo a: _B(ouat(m=1)) *}                           b: f:=1
 
 -----------------------
 guarantee [ true | m:=2 ]
 
 {* lo aa: f=1=>ouat(m=1) *}                         c: r1:=f;
-{* lo c: r1=1=>ouat(m=1); lo aa: sofar(m!=2) *}     d: m:=2 
+{* lo c: r1=1=>ouat(m=1); lo aa: !ouat(m=2) *}
+                                                    d: m:=2 
 {* lo d: r1=1=>_c(m,1,2) *}
 
 -----------------------

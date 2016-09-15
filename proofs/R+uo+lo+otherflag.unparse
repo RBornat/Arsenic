@@ -3,7 +3,7 @@
 guarantee [ true | x:=1; _B(x=1) | y:=1]
 
 {* lo aa: true *}                                   a: x:=1;
-{* lo aa: sofar(y!=1); uo a: _U(x=1) *}             b: y:=1;
+{* lo aa: !ouat(y=1); uo a: _U(x=1) *}              b: y:=1;
 do                                      
     {* lo aa: f=1=>ouat(x=0/\y=2) *}                x: r1:=f
 until {* lo x: r1=1\/f=1=>ouat(x=0/\y=2) *}     bb: r1!=0;
@@ -13,7 +13,7 @@ until {* lo x: r1=1\/f=1=>ouat(x=0/\y=2) *}     bb: r1!=0;
 -------------------------
 guarantee [ true | y:=2; _B(ouat(x=0/\y=2)) | f:=1 ]
 
-{* lo aa: sofar(y!=2) *}                    c: y:=2;
+{* lo aa: !ouat(y=2) *}                     c: y:=2;
 {* lo c : y=2\/y=1/\x=1/\_c(y,2,1) *}       d: r1:=x;
 if {* lo d : r1=0=>ouat(x=0/\y=2) *}    dd: r1=0 
 then
