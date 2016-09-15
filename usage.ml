@@ -34,8 +34,6 @@ let opts = Arg.align
                     Printf.sprintf " print big formulas as trees in error reports (default %B)" !tree_formulas);
                 ("-tree_formulas", Arg.Bool (set_bool tree_formulas), 
                     Printf.sprintf " print big formulas as trees in error reports (default %B)" !tree_formulas);
-                ("-simpleUBsince", Arg.Bool (set_bool simpleUBsince), 
-                    Printf.sprintf " use simple, but slower, Univ/B-> since translation (default %B)" !simpleUBsince);
                 ("-z3benchmarks", Arg.Bool (set_bool z3benchmarks), 
                     Printf.sprintf " produce .smt2 files for each Z3 query (default %B)" !z3benchmarks);
                 ("-z3onecontext", Arg.Set z3onecontext, 
