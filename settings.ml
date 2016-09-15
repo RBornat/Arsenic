@@ -106,7 +106,6 @@ let param_LocalSpec = ref true
 (* *********************** miscellaneous ************************ *)
 
 let maxerrors = ref 0
-let simpleUBsince = ref false
 let expand_macros = ref true
 let all_valid = ref false
 let allow_special_formulas = ref false
