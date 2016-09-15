@@ -227,11 +227,12 @@ let z3check_query question task noisy assertions query =
     | LogArith(f, Implies, _) when is_recFalse f -> verbtriv (Valid (assertions, query))
     | LogArith(_, Implies, t) when is_recTrue  t -> verbtriv (Valid (assertions, query))
     | _                                          ->
-    (* What's the threadcount appropriate to this query? and is it a stability query?
+    (* What's the threadcount appropriate to this query? and is it a two-state (hooked) query?
     
-       If a query has (^) or (~) alone, then two threads, and it's stability.
-       If it has (^) and (^^) or ((~) and (~~) together, then three, and it's stability.
-       If it has Threaded, then count the threads, and it's not stability.
+       If a query has (^) or (~) alone, then two threads, and it's hooked.
+       If it has (^) and (^^) or ((~) and (~~) together, then three, and it's hooked.
+       If it has Threaded, then count the threads, and it's not hooked.
+       If it has Univ or Sofar, then at least two.
        Otherwise just one thread.
      *)
     let count_threads (n,stabq) f =
@@ -243,15 +244,18 @@ let z3check_query question task noisy assertions query =
       | Ouat  (Some h, _, _) -> let i = Modality.tn_of_hat h in
                                 Some (Pervasives.max n (i+1),true)
       | Fvar  (_, Hook, _)
-      | Since (_,Hook, _, _)
+      | Since (_, Hook, _, _)
       | Bfr    (_,Hook, _)
-      | Ouat   (_,Hook, _)
+      | Ouat   (_,Hook, _) -> Some (n, true)    (* could be a single-thread query *)
       | Univ     (Hook, _)
       | Sofar    (Hook, _)
-      | Fandw    (Hook, _) -> Some (n, true)
+      | Fandw    (Hook, _) -> Some (Pervasives.max n 2, true)
+      | Univ  _
+      | Sofar _            
+      | Fandw _            -> Some (Pervasives.max n 2, stabq)
       | _                  -> None
     in
-    let tc, is_stabq = List.fold_left (Formula.fold count_threads) (1,false) (query::assertions) 
+    let tc, is_hookedq = List.fold_left (Formula.fold count_threads) (1,false) (query::assertions) 
     in
     (* define the 'now' function *)
     let assertions = 
@@ -260,7 +264,7 @@ let z3check_query question task noisy assertions query =
       let one = _recFint_of_int 1 in
       (bindForall (NameSet.singleton tid_name) 
                             (_recEqual (_recApp now_function_name [tid_f])
-                                       (if is_stabq then 
+                                       (if is_hookedq then 
                                           _recIte (_recEqual tid_f zero) one zero
                                         else zero
                                        )

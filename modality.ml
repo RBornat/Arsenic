@@ -146,8 +146,10 @@ let enbar binders _P =
    and (because of the way we construct the queries) the initial thread number is irrelevant.
    Thread numbers never appear in a stability query.
    
-   In queries without hatting, hooking or thread numbering the thread count and thread
-   number are each 1.
+   If there is a universal (sofar or U) then the thread count is at least 2.
+   
+   In queries without hatting, hooking, universals or thread numbering the thread count 
+   is 1 and thread number is 0.
    
    There's a 'now' function (see nowf) which takes a thread id and delivers either
    0 or 1. In a stability query, with hatting and/or hooking, it is 
