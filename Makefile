@@ -86,9 +86,10 @@ simpletest:
 	./Test proofs/IRIW.proof
 	./Test proofs/UEXT.unproof -error 7 "UEXT stability"
 	./Test proofs/uo-unstable-interference.unproof -error 4 "self-uo stability"
+#	./Test -SCloc false proofs/LBwithoutSCloc.proof
+#	./Test -SCloc false -sat false proofs/LBwithoutSCloc.proof
 
 tokenringtest:
-#	./Test -SCloc false proofs/LBwithoutSCloc.proof
 #	./Test proofs/tokenringsingleassert.proof
 	./Test proofs/tokenringsingleifthen.proof
 	./Test proofs/tokenringsingleifthenaux.proof
@@ -109,7 +110,7 @@ coherencetest:
 	./Test proofs/S_simple.proof
 	./Test proofs/WWC.proof
 	./Test proofs/R.proof
-	./Test proofs/R+bo+lo.unproof -undecided 15 "inheritance of program postcondition"
+	./Test proofs/R+bo+lo.unproof -error 15 "inheritance of program postcondition"
 	./Test proofs/R+uo+lo.unproof -error 15 "inheritance of program postcondition"
 	./Test proofs/R+uo+lo+flag.unproof -error 15 "EXT stability of f=1=>(_U(x=1) since y=1)" \
 									   -error 16 "EXT stability of r2=1\/f=1=>(_U(x=1) since y=1)"
@@ -118,8 +119,7 @@ coherencetest:
 	./Test proofs/R+uo+lo+otherflag.unproof -error 8 "EXT stability of f=1=>ouat(x=0/\y=2)"
 	./Test proofs/R+uo+lo+otherflag.unparse -error 14 "_B(ouat(x=0/\y=2)) contains temporal coincidence(s)" \
 											-error 20 "_B(ouat(x=0/\y=2)) contains temporal coincidence(s)"
-	./Test -spunchanged false proofs/R+uo+lo.unproof -error 15 "inheritance of program postcondition" \
-													 -error 13 "EXT stability of r1=0=>ouat(x=0/\y=2) against true | x := 1"
+	./Test -spunchanged false proofs/R+uo+lo.unproof -error 15 "inheritance of program postcondition" 
 	./Test proofs/WRW+WR.proof
 	./Test proofs/IRRWIW.proof
 	./Test proofs/WRR+2W.proof
