@@ -640,9 +640,6 @@ let embed nowf bcxt cxt orig_f = (* note binding of nowf *)
                         )
              )
     | Binder (fe, v, bf) ->
-        (* if Name.is_anyvar v then 
-             raise (Error (Sourcepos.string_of_sourcepos f.fpos ^ ": cannot embed variable binding " ^ string_of_formula f));
-         *)
         let bounds = NameSet.add v bounds in
         let cxt, bf' = anyway2 (opttsf bounds situation tidf hiopt hinowf bcxt)
                                ((v,bcxt<@@>f)::cxt)
