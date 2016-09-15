@@ -96,45 +96,46 @@ let optsp_substitute mapping orig_f =
              else _SomeSome (mm NoHook mf')
           )
       ) mf
+      |~~ (fun () -> Some None)
     in
     match f.fnode with
-    | Freg   r                -> (try _SomeSome (mapping <@> r) with Not_found -> None)
+    | Freg   r                  -> (try _SomeSome (mapping <@> r) with Not_found -> None)
     (* Flogc omitted deliberately: you can't assign to a logical constant *)
     (* We only substitute for unhooked variables -- None+NoHook, There+NoHook *)
-    | Fvar  (None,NoHook,v)   -> (try _SomeSome (mapping <@> v) with Not_found -> None)
-    | Fvar     (_,NoHook,v)   -> None (* Formula.optmap leaves it alone *)
-    | Binder (bk,n,bf)        -> (subopt (List.remove_assoc n mapping) &~ (_SomeSome <.> _recBinder bk n)) bf 
-                                 |~~ (fun () -> Some None) (* don't touch it! *)
-    | Bfr (None,NoHook,bf)    -> domodality (_recBfr None) conjoin bf
-    | Bfr (Some _,NoHook,_)   -> Some None
-    | Ouat (None,NoHook, sf)  -> domodality (_recOuat None) disjoin sf
-    | Ouat (Some _,NoHook,_)  -> Some None
+    | Fvar  (None,NoHook,v)     -> (try _SomeSome (mapping <@> v) with Not_found -> None)
+    | Fvar     (_,NoHook,v)     -> None (* Formula.optmap leaves it alone *)
+    | Binder (bk,n,bf)          -> (subopt (List.remove_assoc n mapping) &~ (_SomeSome <.> _recBinder bk n)) bf 
+                                   |~~ (fun () -> Some None) (* don't touch it! *)
+    | Bfr (None,NoHook,bf)      -> domodality (_recBfr None) conjoin bf
+    | Bfr (Some _,NoHook,_)     -> Some None
+    | Ouat (None, NoHook, ouf)  -> domodality (_recOuat None) (fun fs -> List.hd fs) ouf
+    | Ouat (Some _,NoHook,_)    -> Some None
     | Since (None,NoHook,f1,f2) -> (if isvarmapping mapping f 
-                                then (* x\xhook affects only f1 *)
-                                  subopt mapping f1 
-                                  &~~ (fun f1' -> _SomeSome (conjoin [f; f1']))
-                                else (* r\rhook affects both *)
-                                  optionpair_either (subopt mapping) f1 (subopt mapping) f2
-                                  &~~ (fun (f1,f2) -> _SomeSome (_recSince None NoHook f1 f2))
-                               )
-                               |~~ (fun () -> Some None)
+                                    then (* x\xhook affects only f1 *)
+                                      subopt mapping f1 
+                                      &~~ (fun f1' -> _SomeSome (conjoin [f; f1']))
+                                    else (* r\rhook affects both *)
+                                      optionpair_either (subopt mapping) f1 (subopt mapping) f2
+                                      &~~ (fun (f1,f2) -> _SomeSome (_recSince None NoHook f1 f2))
+                                   )
+                                   |~~ (fun () -> Some None)
     | Since (Some _,NoHook,_,_) -> Some None
-    | Univ (NoHook,uf)        -> domodality _recUniv conjoin uf
+    | Univ (NoHook,uf)          -> domodality _recUniv conjoin uf
     (* | Latest (pl,NoHook,v)       -> if List.mem_assoc v mapping 
                                        then _SomeSome (_recLatest pl Hook v)
                                        else Some None
      *)
-    | Sofar (NoHook, sf)      -> domodality _recSofar conjoin sf
+    | Sofar (NoHook, sf)        -> domodality _recSofar conjoin sf
     | Fvar      _
     | Bfr       _           
     | Univ      _            
     (* | Latest    _  *)          
     | Sofar     _             
     | Ouat      _             
-    | Since     _           -> raise (Invalid_argument (Printf.sprintf "sp_substitute [%s] %s, which contains %s" 
-                                                                       (string_of_assoc string_of_name string_of_formula "->" ";" mapping)
-                                                                       (string_of_formula orig_f) 
-                                                                       (string_of_formula f)
+    | Since     _               -> raise (Invalid_argument (Printf.sprintf "sp_substitute [%s] %s, which contains %s" 
+                                                                           (string_of_assoc string_of_name string_of_formula "->" ";" mapping)
+                                                                           (string_of_formula orig_f) 
+                                                                           (string_of_formula f)
                                                        )
                                      )
     | _                     -> None
