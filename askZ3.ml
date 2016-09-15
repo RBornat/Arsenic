@@ -273,20 +273,14 @@ let z3check_query question task noisy assertions query =
     in
     Settings.temp_setting Thread.threadcount tc (fun () ->
       (try 
-           (* a simple way to get Univ(true), B(true) equivalent to true. All I really need
-              is the barrier event.
-            *)
-           let assertions = 
-              if List.exists (Formula.exists (is_recU <||> is_recBfr)) (query::assertions)
-              then (Modality.ur_event ())::assertions 
-              else assertions
-           in
-           (* and say that hatted stuff is from the past *)
+           (* say that hatted stuff is from the past *)
            let assertions = 
               if List.exists (Formula.exists is_hatted) (query::assertions)
               then Modality.hat_hi_asserts@assertions 
               else assertions
            in
+           (* and say there was a starting point (see also embedding of ur_event below) *)
+           let assertions = Modality.himin_assert :: assertions in
            (* add _cv assertions for coherence variables, not(_cv ..) for the others *)
            let cvars =
              List.fold_left (get_coherence_vars NameSet.empty) NameSet.empty (query::assertions)
@@ -317,10 +311,15 @@ let z3check_query question task noisy assertions query =
            (* do the embedding *)
            let embed () =
              let modal_cxt, assertions = 
-               Listutils.mapfold (Modality.embed binders) [] assertions 
+               Listutils.mapfold (Modality.embed Modality.nowf binders) [] assertions 
              in
+             (* embed the ur_event *)
+             let modal_cxt, embedded_ur_event =
+               Modality.embed (fun _ -> Modality.himin_formula) binders modal_cxt Modality.ur_event
+             in
+             let assertions = embedded_ur_event:: assertions in
              let modal_cxt, query = 
-               Modality.embed binders modal_cxt query
+               Modality.embed Modality.nowf binders modal_cxt query
              in
              let coherencetypes =
                List.fold_left (fun set binding -> match extract_coherencetype binding with

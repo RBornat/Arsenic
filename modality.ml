@@ -218,6 +218,7 @@ let vartype_name = "&vtype"
 
 let history_function_name = "&hf"
 let history_index_name = "&hi"
+let himin_name = "&himin"
 let barrier_event_name = "bev&"     (* & on the end cos it's a variable *)
 let tid_name = "&tid"
 let hat_hi_name = "&hat"
@@ -226,6 +227,7 @@ let dhat_hi_name = "&hathat"
 let now_function_name = "&now"
 
 let barrier_event_formula = _recFname barrier_event_name
+let himin_formula = _recFname himin_name
 let hat_hi_formula = _recFname hat_hi_name
 let dhat_hi_formula = _recFname dhat_hi_name
 
@@ -282,7 +284,7 @@ let rec simplify f =
          )
      *)
   in
-  let optsimp f = match f.fnode with
+  let rec optsimp f = match f.fnode with
     | Univ (hk,uf) -> 
         (match uf.fnode with
          | Univ  (_,uf')     -> _SomeSome (simplify (universal hk uf'))
@@ -341,11 +343,10 @@ let rec simplify f =
 
 let allthreads f =
   conjoin (Array.to_list (Array.init !Thread.threadcount (fun i -> threaded i f)))
-  
-let ur_event () = 
-  let event = ouat None NoHook barrier_event_formula in
-  allthreads event
-  
+
+(* to be embedded at himin *)  
+let ur_event = fandw NoHook barrier_event_formula
+
 (* *********************************** embedding ************************************** *)
 
 let addcxt (vtn, t as pair) cxt = if List.mem_assoc vtn cxt then cxt else pair::cxt
@@ -451,14 +452,16 @@ let hat_hi_asserts =
   let zero = _recFint_of_int 0 in
   [ _recLess hat_hi_formula zero; _recLess dhat_hi_formula zero ]
 
+let himin_assert =
+  _recLess himin_formula (_recFint_of_int (-10))
+  
 (* note that hooked formulae operate in state 0; unhooked in state 1 (if stabq) or 0. 
    That last is regulated by the now function: if there's a hook around it will go for 1.
  *)
 let nowf tid = _recApp now_function_name [tid]
-let new_nowf f _ = f
 let hooked_now = _recFint_of_int 0
 
-let embed bcxt cxt orig_f = 
+let embed nowf bcxt cxt orig_f = (* note binding of nowf *)
   
   (* I used to be defensive about hatting and hooking (There and Hook). NoHook I'm not. It shouldn't happen that you get There+Hook;
      it shouldn't happen that you get There inside There or Hook inside Hook. But if the first happens I'll ignore it; if the 
@@ -536,8 +539,8 @@ let embed bcxt cxt orig_f =
         ) 
         &~~ (fun f -> Some (cxt, Some f))
     | Cohere (v, f1, f2) ->
-        let cxt, f1 = anyway2 (opttsf bounds situation tidf hiopt nowf bcxt) cxt f1 in
-        let cxt, f2 = anyway2 (opttsf bounds situation tidf hiopt nowf bcxt) cxt f2 in
+        let cxt, f1 = anyway2 (opttsf bounds situation tidf hiopt hinowf bcxt) cxt f1 in
+        let cxt, f2 = anyway2 (opttsf bounds situation tidf hiopt hinowf bcxt) cxt f2 in
         let cxt, f = embedcoherence cxt v (bcxt <@@> f) f1 f2 in
         Some (cxt, Some f)
     | Since (ht, hk, f1, f2) ->
@@ -547,10 +550,10 @@ let embed bcxt cxt orig_f =
                  | Some hi -> new_name history_index_name 
         in
         let hi_formula = _recFname hi in
-        let cxt, f2 = anyway2 (opttsf bounds (InSince f2) tidf (Some hi) (new_nowf hi_formula) bcxt) cxt f2 in
+        let cxt, f2 = anyway2 (opttsf bounds (InSince f2) tidf (Some hi) (new_himaxf hi_formula) bcxt) cxt f2 in
         let hi1 = new_name history_index_name in
         let hi1_formula = _recFname hi1 in
-        let cxt, f1 = anyway2 (opttsf bounds (InSince f1) tidf (Some hi1) (new_nowf hi1_formula) bcxt) cxt f1 in
+        let cxt, f1 = anyway2 (opttsf bounds (InSince f1) tidf (Some hi1) (new_himaxf hi1_formula) bcxt) cxt f1 in
         let since_assert =
           if !Settings.simpleUBsince then
             ((* This somewhat simpler version -- which doesn't demand a previous state -- is 
@@ -637,8 +640,8 @@ let embed bcxt cxt orig_f =
                  | Some hi -> new_name history_index_name 
         in
         let hi_formula = _recFname hi in
-        let now = if hk=Hook then hooked_now else nowf tidf in 
-        let cxt, sf = anyway2 (opttsf bounds (InSofar sf) tidf (Some hi) (new_nowf hi_formula) bcxt) cxt sf in
+        let now = hinowf tidf in 
+        let cxt, sf = anyway2 (opttsf bounds (InSofar sf) tidf (Some hi) (new_himaxf hi_formula) bcxt) cxt sf in
         let since_always = 
           bindExists (NameSet.singleton hi) (_recAnd (_recLessEqual hi_formula now) sf)
         in
@@ -649,7 +652,7 @@ let embed bcxt cxt orig_f =
              raise (Error (Sourcepos.string_of_sourcepos f.fpos ^ ": cannot embed variable binding " ^ string_of_formula f));
          *)
         let bounds = NameSet.add v bounds in
-        let cxt, bf' = anyway2 (opttsf bounds situation tidf hiopt nowf bcxt)
+        let cxt, bf' = anyway2 (opttsf bounds situation tidf hiopt hinowf bcxt)
                                ((v,bcxt<@@>f)::cxt)
                                bf
         in Some (List.remove_assoc v cxt, Some (_recBinder fe v bf'))
@@ -658,7 +661,7 @@ let embed bcxt cxt orig_f =
         Some (embedcoherencevar cxt v (bcxt <@@> var)) 
     | Threaded (tid, tf) ->
         let cxt, tf' =
-          anyway2 (opttsf bounds situation (_recFint_of_int tid) hiopt nowf bcxt) cxt tf        
+          anyway2 (opttsf bounds situation (_recFint_of_int tid) hiopt hinowf bcxt) cxt tf        
         in
         Some (cxt, Some tf')
     | Bfr  _ 
@@ -671,8 +674,8 @@ let embed bcxt cxt orig_f =
     | _ -> 
         if noisy then Printf.printf " -- ignored";
         None
-  and opttsf bounds situation tidf hiopt nowf bcxt = 
-    Formula.optmapfold (tsf bounds situation tidf hiopt nowf bcxt)
+  and opttsf bounds situation tidf hiopt hinowf bcxt = 
+    Formula.optmapfold (tsf bounds situation tidf hiopt hinowf bcxt)
   in
   anyway2 (opttsf NameSet.empty Amodal (_recFint_of_int !Thread.threadnum) None nowf bcxt) cxt orig_f
 
@@ -687,7 +690,7 @@ let embed_axiom types cxt axiom =
     let cxt, axbinders = 
       completed_typeassign_formula_list (vbinders @ mfilter cxt) [] Bool [axiom]
     in
-    let cxt, axiom = embed axbinders cxt axiom in
+    let cxt, axiom = embed nowf axbinders cxt axiom in
     mfilter cxt, bindForall cfrees axiom::fs
   in
   List.fold_left handle (cxt, []) types 
