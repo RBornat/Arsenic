@@ -519,23 +519,16 @@ let embed nowf bcxt cxt orig_f = (* note binding of nowf *)
     in
     if !Settings.verbose || !Settings.verbose_modality then
       Printf.printf "\nembed tidf=%s f=%s" (string_of_formula tidf) (string_of_formula f); 
-    let process_var cxt ht hk v f =
-      let tidf, epf = 
-      match ht, hk with
-      | Some ht, NoHook ->
-          _recFint_of_int (tn_of_hat ht), hi_of_hat ht
-      | _               ->
-          formula_of_hatopt ht, hiformula_of_ep hk
-      in
-      let vtype = if v=barrier_event_name then Bool else bcxt <@@> f in
-      embedvariable cxt tidf epf v vtype
-    in
     match f.fnode with
     | Fvar (_,_,v) 
        when Stringutils.ends_with v "&new" -> (* x!new isn't really a variable, doesn't have a history *)
         None
-    | Fvar (ht,hk,v) -> (* We don't need special treatment of bound variables: they may even be hatted (but not hooked )*)
-        let cxt, vv = process_var cxt ht hk v f in
+    | Fvar (ht,hk,v) -> 
+        (* We don't need special treatment of bound variables: they may even be hatted (but not hooked )*)
+        (* we can't use roundagain because of bcxt<@@>f *)
+        let vtype = if v=barrier_event_name then Bool else bcxt <@@> f in
+        let tidf, hinowf = tidf_and_himaxf ht hk in
+        let cxt, vv = embedvariable cxt tidf (hinowf tidf) v vtype in
         Some (cxt, Some vv)
     (* | Latest (ht,hk,v) -> 
            let epf = hiformula_of_ep hk in
