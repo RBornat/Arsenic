@@ -650,41 +650,57 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
          say what sourcepost should be, check that's implied by the actual sourcepost, 
          and then do _B/_U(sourcepost) => embroidery.
        *)
-      let modalq sourcepost is_modal wrap_modal embroidery =
+      let modalq sourcenode sourcepost is_modal wrap_modal embroidery =
+      let modal_free = not <.> Formula.exists (Option.bool_of_opt <.> is_modal) in
+      let is_const f = NameSet.cardinal (NameSet.filter Name.is_anyvar (Formula.frees f)) = 0 in
         let rec mq e = 
           match is_modal e with
-          | Some prop -> _recImplies sourcepost prop
+          | Some prop -> prop
           | None      ->
-              match e.fnode with
-              | LogArith(e1, And, e2) -> conjoin [mq e1; mq e2]
-              | Binder(Forall,_,_)    -> 
-                  let ns, eb = multibind Forall [] e in
-                  (match is_modal eb with
-                   | Some prop        -> _recImplies sourcepost (bindForall (NameSet.of_list ns) prop)
-                   | None             -> raise ModalQFail
-                  )
-              | _                     -> raise ModalQFail
+              if modal_free e then e else
+              (match deconjoin e with
+               | Some es -> conjoin (List.map mq es)
+               | None    -> (* not conjoined *)
+                   (match dedisjoin e with
+                    | Some es -> if List.length (List.filter (not <.> is_const) es) <= 1
+                                 then disjoin (List.map mq es)
+                                 else raise ModalQFail
+                    | None    -> (* not conjoined, not disjoined *)
+                        (match e.fnode with
+                         | Binder(Forall,_,_)    -> 
+                             let ns, eb = multibind Forall [] e in
+                             (match is_modal eb with
+                              | Some prop        -> bindForall (NameSet.of_list ns) prop
+                              | None             -> raise ModalQFail
+                             )
+                         | _                     -> (* not conjoined, not disjoined, not forall *)
+                                                    raise ModalQFail
+                        )
+                   )
+              )
         in
-        try mq embroidery
+        try let prop = mq embroidery in _recImplies sourcepost prop
         with ModalQFail -> 
           if subst_clean sourcepost then 
             _recImplies (wrap_modal sourcepost) embroidery
           else
             (report 
-               (Remark (pos_of_stitch stitch, 
-                       Printf.sprintf "Arsenic cannot verify inheritance of embroidery \
-                                       %s because the strongest-post of the source \
-                                       %s contains enhat and/or hooked subformulas. \
-                                       Give us a hint: \
-                                       what does the strongest-post imply?"
-                                      (string_of_formula embroidery)
+               (Error(pos_of_stitch stitch, 
+                       Printf.sprintf "Arsenic cannot guess R such that strongest-post(%s)=>R \
+                                       and %s=>%s. \
+                                       (Fix this problem by including R, in assertion braces, \
+                                       between '%s' and ':')"
                                       (string_of_formula sourcepost)
+                                      (string_of_formula (wrap_modal (_recFname "R")))
+                                      (string_of_formula embroidery)
+                                      (Node.string_of_node sourcenode)
                       )
               );
              _recTrue
             )
       in
       let order = order_of_stitch stitch in
+      let sourcenode = source_of_stitch stitch in 
       let sourcepost, spopt = 
         match order with
         | So -> raise (Crash (Printf.sprintf "so in knot %s" (string_of_knot knot)))
@@ -738,11 +754,11 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
         | So -> raise (Crash (Printf.sprintf "so in knot %s" (string_of_knot knot)))
         | Lo 
         | Go -> _recImplies sourcepost bassert
-        | Bo -> modalq sourcepost 
+        | Bo -> modalq sourcenode sourcepost 
                        (fun f -> match f.fnode with Bfr (None,NoHook,f) -> Some f | _ -> None)
                        (_recBfr None NoHook) 
                        bassert
-        | Uo -> modalq sourcepost
+        | Uo -> modalq sourcenode sourcepost
                        (fun f -> match f.fnode with Univ (NoHook,f) -> Some f | _ -> None)
                        (_recUniv NoHook) 
                        bassert
@@ -1355,7 +1371,7 @@ let checkproof_prog {p_preopt=preopt; p_givopt=givopt; p_ts=threads; p_postopt=p
   
     let avoided spos description stringfun =
       if !verbose || !Settings.z3track<>Settings.Z3trackOff then
-        Printf.printf "\n-- %s: avoided %s %s"
+        Printf.printf "\n-- %s: avoided %s %s\n"
                       (string_of_sourcepos spos)
                       description
                       (stringfun ());
