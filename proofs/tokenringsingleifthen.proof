@@ -1,27 +1,39 @@
+(* 
+   For a comment about how it works in general, see tokenringsingleassert.proof.
+   
+   The if-then-(else)-fi is handled by observing that provably r1=r2 when we hit the
+   conditional formula dd, so dd(f) can be embroidered false.
+   
+   Richard Bornat Sept 2016.
+ *)
 given {W=3}
-{ aa:lh=tk=W }
+{ aa:lh=tk=0 }
 ----------------------
 
-guar [  [A].A%W=0/\lh=A/\_B(tk=A) | tk:=A+1;
-      [A].A%W=0/\_B(lh=A=tk-1) | lh:=A+1
+guar [ [A].A%W=0/\lh=A/\_B(tk=A) | tk:=A+1;
+        [A].A%W=0/\_B(lh=A=tk-1) | lh:=A+1
      ]
 
-macro loopinv = exists (A,B) (A%W=0/\0<=A<lh=B<=A+W/\_B(B<=tk<=A+W))
+macro loopinv = exists (A,B) (A%W=0/\-W<=A<lh=B<=tk<=A+W/\sofar(lh<=A+W)/\_B(B<=tk<=A+W))
 
-macro lhseen = r1%W=0/\0<lh=r1/\_B(tk=r1)
+macro lhseen = r1%W=0/\0<=lh=r1/\sofar(lh<=r1)/\_B(tk=r1)
 
 while bb:true do
     {* bo aa: loopinv *} \->/ ({* lo e: loopinv *} \/ {* lo dd(f): false *})
-                                                    a:skip; 
+                                                        a:skip; 
     do
-        {* lo a: loopinv *}                         b:r1:=lh
-    until {* lo b:loopinv/\(r1%W=0=>r1=lh) *}   cc:r1%W=0;
+        {* lo a: loopinv *}                                 b:r1:=lh
+    until {* lo b:loopinv/\(r1%W=0=>r1=lh) *}           cc:r1%W=0;
     
-    {* lo cc(t): lhseen *}                          c:r2:=tk;
+    {* lo cc(t): lhseen *}                                  c:r2:=tk;
     
-    if {* lo c: lhseen/\r2=tk *} dd: r1=r2 then
-      {* lo dd(t): lhseen/\r2=tk *}                 d:tk:=r2+1; 
-      {* bo d:_B(r1%W=0/\0<lh=r1/\tk=r1+1) *}       e:lh:=r1+1
+    if {* lo c: lhseen/\r2=tk *}                        dd: r1=r2 
+    then
+      {* lo dd(t): lhseen/\r1=r2=tk *} 
+                       [* r1%W=0/\lh=r1=r2/\_B(tk=r1) *]    d:tk:=r2+1; 
+                       
+      {* bo d: _B(r1%W=0/\0<=lh=r1=tk-1)/\sofar(lh<=r1) *}
+                         [* _B(r1%W=0/\0<=lh=r1=tk-1) *]    e:lh:=r1+1
     fi
 od
 rely [[C].C%W!=0/\lh=C/\_B(tk=C) | tk:=C+1;
