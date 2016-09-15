@@ -5,8 +5,8 @@
    deal with, because it tries all the numbers between A and A+W during the proof of
    thread 0.
    
-   (To make a proof with larger W, comment out the guarantees of threads and 2 and 
-   edit 'given{W=3}'.)
+   (To make a proof with larger W, edit 'given{W=3}'. It's not necessary to comment out
+   the guarantees of threads 1 and 2.)
    
    Only thread 0 is given, plus the guarantees of threads 1 and 2, and their combined
    rely for thread 0.
@@ -39,9 +39,7 @@
          of thread 0, we find that the first line of thread 2's guarantee interferes
          with the second line of thread 1's: i.e. thread 2's token write can legitimately
          overtake thread 1's latch write (and so on, so far as this proof is concerned,
-         if there were more than three threads). But there's a limit: the token increases 
-         can't go beyond A+W, because that is the step that thread 0 makes, and it doesn't
-         interfere with itself. Hence the upper limit on tk in line 2 of the rely.
+         if there were more than three threads).
          
       -- It's all sort-of-kind-of message passing (hence the _B in the second line of 
          the guarantee) and it's a little bit LB as well (hence the use of sofar). It's a
@@ -81,7 +79,7 @@ while bb:true do
                          [* _B(r1%W=0/\0<=lh=r1=tk-1) *]    f:lh:=r1+1
 od
 rely [          [C].C%W!=0/\lh=C/\_B(tk=C) | tk:=C+1;
-      [C].C%W!=0/\_B(lh=C<tk<=(C-(C%3)+W)) | lh:=C+1
+      [C].C%W!=0/\_B(lh=C<tk) | lh:=C+1
      ]
 ----------------------
 guar [[D].D%W=1/\lh=D/\_B(tk=D) | tk:=D+1;
