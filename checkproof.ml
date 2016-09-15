@@ -1202,7 +1202,7 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
             let unique_ve (loc,e) =
               if NameSet.mem (Location.locv loc) !Coherence.coherence_variables then
                 (let rhs = 
-                   _recSofar NoHook (_recNotEqual (Location._recFloc loc) e) 
+                   _recNot (_recOuat None NoHook (_recEqual (Location._recFloc loc) e))
                  in
                  let check_unique pre = 
                    let query = _recImplies pre rhs in
