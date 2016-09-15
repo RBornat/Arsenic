@@ -473,22 +473,9 @@ let hooked_now = _recFint_of_int 0
 
 let embed nowf bcxt cxt orig_f = (* note binding of nowf *)
   
-  (* I used to be defensive about hatting and hooking (There and Hook). NoHook I'm not. It shouldn't happen that you get There+Hook;
-     it shouldn't happen that you get There inside There or Hook inside Hook. But if the first happens I'll ignore it; if the 
-     second happens I'll take the outer (which is the same as taking the inner, isn't it? but the code works that way).
-   *)
+  (* I used to be defensive about hatting and hooking. Noq I'm not. *)
 
-  let rec tsf bounds situation (tidf:formula) (hiopt:Name.name option) (nowf:formula->formula) bcxt cxt f = 
-    let noisy = !Settings.verbose_modality in
-    (* if noisy then Printf.printf "\ntsf formula is %s" (string_of_formula f); *)
-    let formula_of_hatopt ht = 
-      match ht with 
-      | None      -> tidf
-      (* tildes and hats don't occur in the same query *)
-      | Some hat  -> _recFint_of_int (tn_of_hat hat)
-    in
-    let hi_of_ep hk =
-      match hk with Hook -> hooked_now | _ -> nowf tidf
+  let rec tsf bounds situation (tidf:formula) (hiopt:Name.name option) (hinowf:formula->formula) bcxt cxt f = 
     let new_himaxf f _ = f in
     let tidf_and_himaxf ht hk =
       let tidf = match ht with 
@@ -504,12 +491,12 @@ let embed nowf bcxt cxt orig_f = (* note binding of nowf *)
       in
       tidf, hinowf
     in
-    let hiformula_of_ep hk =
-      either (hi_of_ep hk) (hiopt &~~ (_Some <.> _recFname))
     let roundagain ht hk f' =
       let tidf, hinowf = tidf_and_himaxf ht hk in
       tsf bounds situation tidf hiopt hinowf bcxt cxt f'
     in
+    let noisy = !Settings.verbose_modality in
+    if noisy then Printf.printf "\ntsf formula is %s" (string_of_formula f);
     let bindallthreads tidname bf = 
       let tidf = _recFname tidname in
       let limits =
@@ -658,10 +645,12 @@ let embed nowf bcxt cxt orig_f = (* note binding of nowf *)
           anyway2 (opttsf bounds situation (_recFint_of_int tid) hiopt hinowf bcxt) cxt tf        
         in
         Some (cxt, Some tf')
+    (* hats and hooks *)
     | Since (ht, hk, f1, f2) -> roundagain ht hk (rplacSince f None NoHook f1 f2)
     | Sofar (hk, sf)         -> roundagain None hk (rplacSofar f NoHook sf)
     | Ouat (ht, hk, sf)      -> roundagain ht hk (rplacOuat f None NoHook sf)
     | Fandw (hk,ef)          -> roundagain None hk (rplacFandw f NoHook ef)
+    (* things that have been simplified away *)
     | Bfr  _ 
     | Univ _ ->
         raise (Error (Printf.sprintf "Modality.embed: unsimplified %s in %s"
