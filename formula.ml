@@ -53,8 +53,8 @@ type formula = {fpos: sourcepos; fnode: formulanode}
   
   | Cohere       of var * formula * formula             (* it's a global relation ... but embedding is subtle *)
   
-  | Fandw        of hooking * formula (* ONLY for use in modality.ml and askZ3.ml; current use ONLY 
-                                         to distribute coherence axioms across all threads.
+  | Fandw        of hooking * formula (* ONLY for use in embedding; it has strange behaviour
+                                         because of the embedding (state 1 only in thread 0).
                                        *)
   | App          of name * formula list (* these are currently provided for the benefit
                                            of askZ3 in the embedding of stuff.
