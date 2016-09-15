@@ -19,34 +19,32 @@ open Assign
 let enhat hatting orig_f =
   let rec opt_hat f =
     match f.fnode with
-    | Fvar(None,NoHook,v)     -> _SomeSome (_recFvar (Some hatting) NoHook v)
-    | Bfr (None,NoHook,bf)    -> if is_Tildehatting hatting 
-                                 then ohat bf &~~ (_SomeSome <.> _recBfr (Some hatting) NoHook)
-                                 else _SomeSome (conjoin [f; hat bf]) (* because B(P)=>P *)
-    | Univ (NoHook,uf)        -> _SomeSome (conjoin [f; hat uf])      (* because U(P)=>P *) 
-    (* | Latest (None,NoHook,v)       -> if hatting=InflightHat 
-                                      then _SomeSome (_recLatest There NoHook v)
-                                      else Some None (* don't touch it! *)
+    | Fvar(None,NoHook,v)       -> _SomeSome (_recFvar (Some hatting) NoHook v)
+    | Bfr (None,NoHook,bf)      -> if is_Tildehatting hatting 
+                                   then ohat bf &~~ (_SomeSome <.> _recBfr (Some hatting) NoHook)
+                                   else _SomeSome (conjoin [f; hat bf])                 (* because B(P)=>P *)
+    | Univ (NoHook,uf)          -> _SomeSome (conjoin [f; hat uf])                      (* because U(P)=>P *) 
+    (* | Latest (None,NoHook,v) -> if hatting=InflightHat 
+                                   then _SomeSome (_recLatest There NoHook v)
+                                   else Some None (* don't touch it! *)
      *)
-    | Sofar (NoHook,sf)       -> _SomeSome (conjoin [f; hat sf])      (* because Sofar(P)=>P *)
-    | Ouat  (None,NoHook,sf)  -> ohat sf &~~ (_SomeSome <.> _recOuat (Some hatting) NoHook) (* Ouat is local *)
-    | Since (None,NoHook,f1,f2) -> optionpair_either ohat f1 ohat f2
-                                 &~~ (_SomeSome <.> uncurry2 (_recSince (Some hatting) NoHook)) 
+    | Sofar (NoHook,sf)         -> _SomeSome (conjoin [f; hat sf])                      (* because Sofar(P)=>P *)
+    | Ouat  (None,NoHook,sf)    -> _SomeSome (_recOuat (Some hatting) NoHook sf)        (* Ouat is local, always hatted *)
+    | Since (None,NoHook,f1,f2) -> _SomeSome (_recSince (Some hatting) NoHook f1 f2)    (* ditto Since *)
     (* we hat even inside binders. Oh yes. Because binding a variable doesn't bind thread or epoch *) 
-    | Binder (bk,n,bf)
-                              -> (ohat bf &~~ (_SomeSome <.> _recBinder bk n))
-                                 |~~ (fun () -> Some None)
+    | Binder (bk,n,bf)          -> (ohat bf &~~ (_SomeSome <.> _recBinder bk n))
+                                   |~~ (fun () -> Some None)
     | Fvar    _           
     | Bfr     _           
     | Univ    _        
     | Sofar   _
     | Ouat    _
-    | Since   _               -> raise (Invalid_argument (Printf.sprintf "Strongestpost.enhat.opt_hat %s in %s %s" 
-                                                                         (string_of_formula f)
-                                                                         (string_of_hatting hatting)
-                                                                         (string_of_formula orig_f)
-                                                         )
-                                       )
+    | Since   _                 -> raise (Invalid_argument (Printf.sprintf "Strongestpost.enhat.opt_hat %s in %s %s" 
+                                                                           (string_of_formula f)
+                                                                           (string_of_hatting hatting)
+                                                                           (string_of_formula orig_f)
+                                                           )
+                                         )
     | _                         -> None
   and ohat f = Formula.optmap opt_hat f
   and hat f = Formula.map opt_hat f
@@ -66,7 +64,7 @@ let enhat hatting orig_f =
         (_B P)[varmapping] = (-)_B(P)/\P[varmapping]; 
         (_U P)[varmapping] = (-)_U(P)/\P[varmapping]; 
         (_S P)[varmapping] = (-)_S(P)/\P[varmapping]; 
-        (_O P)[varmapping] = (-)_O(P)\/P[varmapping];  -- or, not and
+        (_O P)[varmapping] = (-)_O(P)
       
     Since:
       
