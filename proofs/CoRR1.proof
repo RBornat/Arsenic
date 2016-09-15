@@ -1,7 +1,7 @@
 {aa: x=1}
 ---------------------
 guarantee [x=1 | x:=2]
-{* lo aa: sofar(x=1) *}             a: x:=2
+{* lo aa: sofar(x=1) *}[* x=1 *]   a: x:=2
 {* lo a: _c(x,1,2) *}
 ---------------------
 # there appears to be no way round the problem that the observation of r2 must be
