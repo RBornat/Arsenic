@@ -28,7 +28,7 @@ let enhat hatting orig_f =
                                    then _SomeSome (_recLatest There NoHook v)
                                    else Some None (* don't touch it! *)
      *)
-    | Sofar (NoHook,sf)         -> _SomeSome (conjoin [f; hat sf])                      (* because Sofar(P)=>P *)
+    | Sofar (NoHook,sf)         -> Some None                                            (* because Sofar(P)=>enhat(P) anyway *)
     | Ouat  (None,NoHook,sf)    -> _SomeSome (_recOuat (Some hatting) NoHook sf)        (* Ouat is local, always hatted *)
     | Since (None,NoHook,f1,f2) -> _SomeSome (_recSince (Some hatting) NoHook f1 f2)    (* ditto Since *)
     (* we hat even inside binders. Oh yes. Because binding a variable doesn't bind thread or epoch *) 
