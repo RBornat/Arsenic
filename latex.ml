@@ -197,7 +197,7 @@ let latex_of_var v =
 let latex_of_logc v =
   if Name.is_pmsc v then
     let tnum, r = Name.pmsc_parts v in
-    tnum ^ pmsc_colon ^ latex_of_reg r
+    "(" ^ tnum ^ pmsc_colon ^ latex_of_reg r ^ ")"
   else latex_of_name v
 
 let rec formulaprio f =
@@ -222,11 +222,11 @@ let rec latex_of_primary f =
                               ^ " " ^ sname "then" ^ " " ^ latex_of_formula tf
                               ^ " " ^ sname "else" ^ " " ^ latex_of_formula ef
                               ^ " " ^ sname "fi"
-    | Bfr (_,f)          -> latex_of_app (sname "Bfr")     (latex_of_formula f)
+    | Bfr (_,_,f)          -> latex_of_app (sname "Bfr")     (latex_of_formula f)
     | Univ   (_,f)         -> latex_of_app (sname "U")       (latex_of_formula f)
     | Fandw    (_,f)         -> latex_of_app (sname "Fandw")     (latex_of_formula f)
     | Sofar (_,f)        -> latex_of_app (sname "sofar")   (latex_of_formula f)
-    | Ouat  (_,f)        -> latex_of_app (sname "ouat")   (latex_of_formula f)
+    | Ouat  (_,_,f)        -> latex_of_app (sname "ouat")   (latex_of_formula f)
     | App (n,fs)           -> latex_of_app (latex_of_name n) (latex_of_args fs)
     | Cohere (v,f1,f2)     -> latex_of_app (latex_of_var v ^"_{c}") (latex_of_args [f1;f2])
     (* | Latest _             -> raise (Error "latest not supported. Sorry") (*latex_of_app (sname "latest") (latex_of_var v)*) *)
@@ -269,7 +269,7 @@ and latex_of_formula f =
        | Some (_,_,cseq)        -> latex_of_cseq cseq
        | None                   -> latex_of_binary_formula left right (latex_of_logop     lop) (logprio lop)
       )
-  | Since   (_, left, right)    -> latex_of_binary_formula left right (" " ^ sname "since" ^ " ") (formulaprio f)
+  | Since   (_, _, left, right)    -> latex_of_binary_formula left right (" " ^ sname "since" ^ " ") (formulaprio f)
   | Binder (bk, n, f)           -> 
       let ns, f = multibind bk [n] f in
       Printf.sprintf "%s%s(%s)"
