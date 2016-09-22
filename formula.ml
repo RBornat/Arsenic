@@ -368,7 +368,7 @@ let formula_of_threadid = _recFint <.> string_of_int
 
 let rec deconjoin f =
   match f.fnode with
-  | Not nf                 -> (dedisjoin &~ _Some) nf
+  | Not nf                 -> (dedisjoin &~ (_Some <.> List.map negate)) nf
   | LogArith (f1, And, f2) ->
       (match deconjoin f1, deconjoin f2 with
        | Some f1s, Some f2s -> Some (f1s@f2s)
@@ -380,7 +380,7 @@ let rec deconjoin f =
   
 and dedisjoin f =
   match f.fnode with
-  | Not nf                     -> deconjoin nf
+  | Not nf                     -> (deconjoin &~ (_Some <.> List.map negate)) nf
   | LogArith (f1, Implies, f2) -> 
       (let notf1 = _recNot f1 in
        match dedisjoin notf1, dedisjoin f2 with
