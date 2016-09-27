@@ -675,10 +675,19 @@ let check_coincidence_bu binders f =
 (* Sofar doesn't cause any transmission, so it's probably ok. *)
 let check_coincidence_formula binders =
   Formula.fold (fun () subf -> match subf.fnode with
-                               | Bfr (_,_, _)
-                               | Univ  (_, _) -> check_coincidence_bu binders subf;
-                                                 Some ()
-                               | _            -> None
+                               | Bfr (_,_, bf) -> check_coincidence_bu binders subf;
+                                                  if Formula.exists (is_recU <||> is_recSofar) bf then
+                                                    report (Warning (subf.fpos,
+                                                                     Printf.sprintf "%s contains _U and/or sofar modalities. \
+                                                                                     This can cause problems. Can you eliminate the \
+                                                                                     nesting?"
+                                                                                    (string_of_formula subf)
+                                                                    )
+                                                           );
+                                                  Some ()
+                               | Univ  (_, uf) -> check_coincidence_bu binders subf;
+                                                  Some ()
+                               | _             -> None
                )
                ()
 

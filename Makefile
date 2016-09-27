@@ -115,7 +115,9 @@ coherencetest:
 	./Test proofs/R+uo+lo+flag.unproof -error 15 "EXT stability of f=1=>(_U(x=1) since y=1)" \
 									   -error 16 "EXT stability of r2=1\/f=1=>(_U(x=1) since y=1)"
 	./Test proofs/R+uo+lo+flag.unparse -error 3 "_B(_U(x=1) since y=1) contains temporal coincidence(s)" \
-									   -error 8 "_B(_U(x=1) since y=1) contains temporal coincidence(s)"
+								   -warning 3 "_B(_U(x=1) since y=1) contains _U and/or sofar modalities." \
+								   -error 8 "_B(_U(x=1) since y=1) contains temporal coincidence(s)" \
+								   -warning 8 "_B(_U(x=1) since y=1) contains _U and/or sofar modalities."
 	./Test proofs/R+uo+lo+otherflag.unproof -error 8 "EXT stability of f=1=>ouat(x=0/\y=2)"
 	./Test proofs/R+uo+lo+otherflag.unparse -error 14 "_B(ouat(x=0/\y=2)) contains temporal coincidence(s)" \
 											-error 20 "_B(ouat(x=0/\y=2)) contains temporal coincidence(s)"

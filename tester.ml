@@ -12,7 +12,7 @@ let unexpected = ref 0
 let time = ref ""
 let results = ref ""
 
-type flag = FError | FUndecided
+type flag = FError | FWarning | FUndecided
 
 let runtest progname files args flags = 
   let args = String.concat " " args in
@@ -37,6 +37,7 @@ let runtest progname files args flags =
   in
   let string_of_flag = function
     | FError     -> "error"
+    | FWarning   -> "warning"
     | FUndecided -> "undecided"
   in
   let rec accept flags flag n words =
@@ -57,6 +58,8 @@ let runtest progname files args flags =
         match words with
         | "**ERROR"::"line"::n::words      -> checkoutput (accept flags FError (int_of_string n) words)
         | "**ERROR:"::words                -> checkoutput (accept flags FError 0 words)
+        | "**WARNING"::"line"::n::words      -> checkoutput (accept flags FWarning (int_of_string n) words)
+        | "**WARNING:"::words                -> checkoutput (accept flags FWarning 0 words)
         | "**OH"::"BOTHER"::"line"::n::words -> checkoutput (accept flags FUndecided (int_of_string n) words)
         | "**OH"::"BOTHER"::words            -> checkoutput (accept flags FUndecided 0 words)
         | "total"::"time"::"CPU"::secs::_  -> time:=secs; checkoutput flags
@@ -114,6 +117,13 @@ let files, args = List.partition (fun s -> Stringutils.ends_with s ".proof" ||
 let rec getflags es args = function
   | "-error" :: n :: word 
     :: rest                     -> (try getflags ((FError, int_of_string n, Stringutils.words word)::es) args rest
+                                    with Failure "int_of_string" -> 
+                                      Printf.printf "\n-error %s %s ignored -- %s should be integer"
+                                                    n word n;
+                                      getflags es args rest
+                                   )
+  | "-warning" :: n :: word 
+    :: rest                     -> (try getflags ((FWarning, int_of_string n, Stringutils.words word)::es) args rest
                                     with Failure "int_of_string" -> 
                                       Printf.printf "\n-error %s %s ignored -- %s should be integer"
                                                     n word n;

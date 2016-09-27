@@ -21,7 +21,7 @@ let enhat hatting orig_f =
     match f.fnode with
     | Fvar(None,NoHook,v)       -> _SomeSome (_recFvar (Some hatting) NoHook v)
     | Bfr (None,NoHook,bf)      -> if is_Tildehatting hatting 
-                                   then ohat bf &~~ (_SomeSome <.> _recBfr (Some hatting) NoHook)
+                                   then _SomeSome (_recBfr (Some hatting) NoHook bf)
                                    else _SomeSome (conjoin [f; hat bf])                 (* because B(P)=>P *)
     | Univ (NoHook,uf)          -> _SomeSome (conjoin [f; hat uf])                      (* because U(P)=>P *) 
     (* | Latest (None,NoHook,v) -> if hatting=InflightHat 
