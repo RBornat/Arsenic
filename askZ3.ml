@@ -235,7 +235,7 @@ let z3check_query question task noisy assertions query =
        If it has Univ or Sofar, then at least two.
        Otherwise just one thread.
      *)
-    let count_threads (n,stabq) f =
+    let count_threads (n,ihq) f =
       match f.fnode with
       | Threaded (i, _)     -> Some (Pervasives.max n (i+1), false)
       | Fvar  (Some h, _, _) 
@@ -252,7 +252,7 @@ let z3check_query question task noisy assertions query =
       | Fandw    (Hook, _) -> Some (Pervasives.max n 2, true)
       | Univ  _
       | Sofar _            
-      | Fandw _            -> Some (Pervasives.max n 2, stabq)
+      | Fandw _            -> Some (Pervasives.max n 2, ihq)
       | _                  -> None
     in
     let tc, is_hookedq = List.fold_left (Formula.fold count_threads) (1,false) (query::assertions) 
