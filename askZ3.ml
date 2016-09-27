@@ -257,19 +257,8 @@ let z3check_query question task noisy assertions query =
     in
     let tc, is_hookedq = List.fold_left (Formula.fold count_threads) (1,false) (query::assertions) 
     in
-    (* define the 'now' function *)
-    let assertions = 
-      let tid_f = _recFname tid_name in
-      let zero = _recFint_of_int 0 in
-      let one = _recFint_of_int 1 in
-      (bindForall (NameSet.singleton tid_name) 
-                            (_recEqual (_recApp now_function_name [tid_f])
-                                       (if is_hookedq then 
-                                          _recIte (_recEqual tid_f zero) one zero
-                                        else zero
-                                       )
-                            )
-      )::assertions
+    (* define the 'now' state *)
+    let nowf = if is_hookedq then Modality.nowf_hookedq else Modality.nowf_unhookedq 
     in
     Settings.temp_setting Thread.threadcount tc (fun () ->
       (try 
@@ -311,15 +300,15 @@ let z3check_query question task noisy assertions query =
            (* do the embedding *)
            let embed () =
              let modal_cxt, assertions = 
-               Listutils.mapfold (Modality.embed Modality.nowf binders) [] assertions 
+               Listutils.mapfold (Modality.embed nowf binders) [] assertions 
              in
              (* embed the ur_event *)
              let modal_cxt, embedded_ur_event =
-               Modality.embed (fun _ -> Modality.himin_formula) binders modal_cxt Modality.ur_event
+               Modality.embed Modality.himin_formula binders modal_cxt Modality.ur_event
              in
              let assertions = embedded_ur_event:: assertions in
              let modal_cxt, query = 
-               Modality.embed Modality.nowf binders modal_cxt query
+               Modality.embed nowf binders modal_cxt query
              in
              let coherencetypes =
                List.fold_left (fun set binding -> match extract_coherencetype binding with
@@ -333,10 +322,14 @@ let z3check_query question task noisy assertions query =
                if !in_pms then Coherence.pms_axiom :: Coherence.coherence_axioms
                           else Coherence.coherence_axioms
              in
+             let axioms = fandw NoHook (conjoin axioms) in
+             if track_embedding () then
+               Printf.printf "\n\ncoherence axioms =\n%s" (explain_string_of_formula axioms);
              let modal_cxt, axioms =
-               embed_axiom (FtypeSet.elements coherencetypes) 
+               embed_axiom nowf
+                           (FtypeSet.elements coherencetypes) 
                            modal_cxt 
-                           (fandw NoHook (conjoin axioms)) 
+                           axioms 
              in
              let assertions = assertions@axioms in
              modal_cxt, query, assertions

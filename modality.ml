@@ -224,8 +224,6 @@ let tid_name = "&tid"
 let hat_hi_name = "&hat"
 let dhat_hi_name = "&hathat"
 
-let now_function_name = "&now"
-
 let barrier_event_formula = _recFname barrier_event_name
 let himin_formula = _recFname himin_name
 let hat_hi_formula = _recFname hat_hi_name
@@ -456,34 +454,36 @@ let hat_hi_asserts =
 let himin_assert =
   _recLess himin_formula (_recFint_of_int (-10))
   
-(* note that hooked formulae operate in state 0; unhooked in state 1 (if stabq) or 0. 
-   That last is regulated by the now function: if there's a hook around it will go for 1.
- *)
-let nowf tid = _recApp now_function_name [tid]
-let hooked_now = _recFint_of_int 0
-
-let embed nowf bcxt cxt orig_f = (* note binding of nowf *)
+let nowf_hookedq = _recFint_of_int 1
+let nowf_unhookedq = _recFint_of_int 0
   
-  (* I used to be defensive about hatting and hooking. Noq I'm not. *)
+let embed hinow bcxt cxt orig_f = (* note binding of nowf *)
+  
+  (* I used to be defensive about hatting and hooking. Now I'm not. *)
 
-  let rec tsf bounds (tidf:formula) (hiopt:Name.name option) (hinowf:formula->formula) bcxt cxt f = 
-    let new_himaxf f _ = f in
-    let tidf_and_himaxf ht hk =
-      let tidf = match ht with 
-                 | None    -> tidf 
-                 | Some ht -> _recFint_of_int (match ht with
-                                               | Hat  | Tilde  -> 1
-                                               | DHat | DTilde -> 2
-                                              )
-      in
-      let hinowf = match hk with
-                   | NoHook -> hinowf
-                   | Hook   -> new_himaxf hooked_now
-      in
-      tidf, hinowf
+  let rec tsf bounds (tidf:formula) (hiopt:Name.name option) (hinowf:formula) bcxt cxt f = 
+    let hatted_hinowf () =
+      match hinowf.fnode with
+      | Fint "0" -> hinowf
+      | Fint "1" -> _recFint_of_int 0
+      | _        -> raise (Error (Printf.sprintf "tsf tidf=%s with f=%s in orig_f=%s"
+                                                 (string_of_formula tidf)
+                                                 (string_of_formula f)
+                                                 (string_of_formula orig_f)
+                                 )
+                          )
+    in                     
+    let tidf_and_hinowf ht hk =
+      match ht, hk with
+      | Some Hat   , NoHook 
+      | Some Tilde , NoHook -> _recFint_of_int 1, hatted_hinowf ()
+      | Some DHat  , NoHook 
+      | Some DTilde, NoHook -> _recFint_of_int 2, hatted_hinowf ()
+      | None       , Hook   -> tidf             , _recFint_of_int 0
+      | _                   -> tidf             , hinowf
     in
     let roundagain ht hk f' =
-      let tidf, hinowf = tidf_and_himaxf ht hk in
+      let tidf, hinowf = tidf_and_hinowf ht hk in
       tsf bounds tidf hiopt hinowf bcxt cxt f'
     in
     let noisy = !Settings.verbose_modality in
@@ -507,8 +507,8 @@ let embed nowf bcxt cxt orig_f = (* note binding of nowf *)
         (* We don't need special treatment of bound variables: they may even be hatted (but not hooked )*)
         (* we can't use roundagain because of bcxt<@@>f *)
         let vtype = if v=barrier_event_name then Bool else bcxt <@@> f in
-        let tidf, hinowf = tidf_and_himaxf ht hk in
-        let cxt, vv = embedvariable cxt tidf (hinowf tidf) v vtype in
+        let tidf, hinowf = tidf_and_hinowf ht hk in
+        let cxt, vv = embedvariable cxt tidf hinowf v vtype in
         Some (cxt, Some vv)
     (* | Latest (ht,hk,v) -> 
            let epf = hiformula_of_ep hk in
@@ -538,10 +538,10 @@ let embed nowf bcxt cxt orig_f = (* note binding of nowf *)
                  | Some hi -> new_name history_index_name 
         in
         let hi_formula = _recFname hi in
-        let cxt, f2 = anyway2 (opttsf bounds tidf (Some hi) (new_himaxf hi_formula) bcxt) cxt f2 in
+        let cxt, f2 = anyway2 (opttsf bounds tidf (Some hi) hi_formula bcxt) cxt f2 in
         let hi1 = new_name history_index_name in
         let hi1_formula = _recFname hi1 in
-        let cxt, f1 = anyway2 (opttsf bounds tidf (Some hi1) (new_himaxf hi1_formula) bcxt) cxt f1 in
+        let cxt, f1 = anyway2 (opttsf bounds tidf (Some hi1) hi1_formula bcxt) cxt f1 in
         let since_assert =
           (* barriers _must_ have occurred in a previous state. If for nothing else, this 
              is essential to avoid y=1/\x=(-)x => (_U(x=1) since y=1).
@@ -550,8 +550,8 @@ let embed nowf bcxt cxt orig_f = (* note binding of nowf *)
             (NameSet.singleton hi)
             (conjoin 
                [_recLessEqual himin_formula hi_formula;                                 (* can't go before beginning *)
-                _recLessEqual hi_formula (hinowf tidf);
-                _recLessEqual hi_formula (nowf tidf);                                   (* can't go past 'now' *)
+                _recLessEqual hi_formula hinowf;
+                (* _recLessEqual hi_formula (nowf tidf);                                   (* can't go past 'now' *) *)
                 (if barrier_since 
                  then _recLess hi_formula (_recFint_of_int 1) 
                  else _recTrue
@@ -561,8 +561,8 @@ let embed nowf bcxt cxt orig_f = (* note binding of nowf *)
                   (NameSet.singleton hi1) 
                   (_recImplies 
                      (conjoin [_recLessEqual hi_formula hi1_formula;                    (* hi_formula already constrained below *)
-                               _recLessEqual hi1_formula (hinowf tidf);
-                               _recLessEqual hi1_formula (nowf tidf)                    (* can't go past 'now' *)
+                               _recLessEqual hi1_formula hinowf (* ;
+                               _recLessEqual hi1_formula (nowf tidf)                    (* can't go past 'now' *) *)
                               ]
                      )
                      f1
@@ -578,21 +578,18 @@ let embed nowf bcxt cxt orig_f = (* note binding of nowf *)
                  | Some hi -> new_name history_index_name 
         in
         let hi_formula = _recFname hi in
-        let tid_formula = _recFname tid_name in
-        let now = hinowf tid_formula in 
-        let cxt, sf = anyway2 (opttsf bounds tid_formula (Some hi) (new_himaxf hi_formula) bcxt) cxt sf in
+        let cxt, everywhere = anyway2 (opttsf bounds tidf (Some hi) hi_formula bcxt) cxt (fandw NoHook sf) in
         let since_always = 
           bindForall (NameSet.singleton hi) 
                      (_recImplies (conjoin [_recLessEqual himin_formula hi_formula;     (* can't go before beginning *)
-                                            _recLessEqual hi_formula now; 
-                                            _recLessEqual hi_formula (nowf tid_formula) (* can't go past 'now' *)
+                                            _recLessEqual hi_formula hinowf (* ; 
+                                            _recLessEqual hi_formula (nowf tid_formula) (* can't go past 'now' *) *)
                                            ]
                                   )
-                                  sf;
-                                
+                                  everywhere;
                      )
         in
-        Some (cxt, Some (bindallthreads tid_name since_always))
+        Some (cxt, Some since_always)
     | Ouat (None, NoHook, sf) ->
         (* exists hi (not sf) *)
         let hi = match hiopt with
@@ -600,13 +597,12 @@ let embed nowf bcxt cxt orig_f = (* note binding of nowf *)
                  | Some hi -> new_name history_index_name 
         in
         let hi_formula = _recFname hi in
-        let now = hinowf tidf in 
-        let cxt, sf = anyway2 (opttsf bounds tidf (Some hi) (new_himaxf hi_formula) bcxt) cxt sf in
+        let cxt, sf = anyway2 (opttsf bounds tidf (Some hi) hi_formula bcxt) cxt sf in
         let since_always = 
           bindExists (NameSet.singleton hi) 
                      (conjoin [_recLessEqual himin_formula hi_formula;                  (* can't go before beginning *)
-                               _recLessEqual hi_formula now;
-                               _recLessEqual hi_formula (nowf tidf);                    (* can't go past 'now' *)
+                               _recLessEqual hi_formula hinowf;
+                               (* _recLessEqual hi_formula (nowf tidf);                    (* can't go past 'now' *) *)
                                sf
                               ]
                      )
@@ -617,7 +613,7 @@ let embed nowf bcxt cxt orig_f = (* note binding of nowf *)
         let cxt, ef1 = anyway2 (opttsf bounds tidf hiopt hinowf bcxt) cxt ef in 
         let tidf' = _recFname tid_name in
         let cxt, ef' = anyway2 (opttsf bounds tidf' hiopt hinowf bcxt) cxt ef in 
-        Some (cxt, Some (_recIte (_recEqual (hinowf tidf) (_recFint_of_int 1))
+        Some (cxt, Some (_recIte (_recEqual hinowf (_recFint_of_int 1))
                                  ef1
                                  (bindallthreads tid_name ef')
                         )
@@ -655,12 +651,12 @@ let embed nowf bcxt cxt orig_f = (* note binding of nowf *)
   and opttsf bounds tidf hiopt hinowf bcxt = 
     Formula.optmapfold (tsf bounds tidf hiopt hinowf bcxt)
   in
-  anyway2 (opttsf NameSet.empty (_recFint_of_int !Thread.threadnum) None nowf bcxt) cxt orig_f
+  anyway2 (opttsf NameSet.empty (_recFint_of_int !Thread.threadnum) None hinow bcxt) cxt orig_f
 
 
 let mfilter = List.filter is_modalitybinding
 
-let embed_axiom types cxt axiom =
+let embed_axiom hinow types cxt axiom =
   let cfrees = Formula.frees axiom in
   let cvs = List.filter Name.is_anyvar (NameSet.elements cfrees) in
   let handle (modal_cxt, fs) t =
@@ -668,7 +664,7 @@ let embed_axiom types cxt axiom =
     let cxt, axbinders = 
       completed_typeassign_formula_list (vbinders @ mfilter cxt) [] Bool [axiom]
     in
-    let cxt, axiom = embed nowf axbinders cxt axiom in
+    let cxt, axiom = embed hinow axbinders cxt axiom in
     mfilter cxt, bindForall cfrees axiom::fs
   in
   List.fold_left handle (cxt, []) types 
