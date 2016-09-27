@@ -843,7 +843,7 @@ let indented_string_of_formula just_log indent f =
                                        in
                                        ss@["fi"], w
       | Fandw    (hk,f)             -> isf_app (string_of_hk hk ^ m_Fandw_token) [f]
-      | Bfr (ht,hk,f)               -> isf_app (string_of_hk hk ^ m_Bfr_token) [f]
+      | Bfr (ht,hk,f)               -> isf_app (string_of_ht ht ^ string_of_hk hk ^ m_Bfr_token) [f]
       | Univ   (hk,f)               -> isf_app (string_of_hk hk ^ m_Univ_token) [f]
       | Sofar    (hk,f)             -> isf_app (string_of_prefixSofar hk) [f]
       | Ouat  (ht,hk,f)             -> isf_app (string_of_ht ht ^ string_of_hk hk ^ m_Ouat_token) [f]
