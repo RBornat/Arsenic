@@ -220,14 +220,14 @@
            let check_single is_first (rs,loc) = 
              (* first lhs can have a realreg in first position *)
              if not is_first && Name.is_realreg (List.hd rs) then 
-               bad ("only first left-hand element may name an actual (non-auxiliary) register");
+               bad ("only first left-hand element may name an regular (non-auxiliary) register");
              (* if realreg first, rhs must be real *)
              if Name.is_realreg (List.hd rs) then
                (match loc with
                 | VarLoc v -> 
                     if Name.is_auxvar v then
                       bad ("cannot assign value from auxiliary variable " ^ string_of_var v ^
-                           " to " ^ prefixed_phrase_of_list string_of_reg "actual register" "actual registers" rs
+                           " to " ^ prefixed_phrase_of_list string_of_reg "regular register" "regular registers" rs
                           )
                )
            in

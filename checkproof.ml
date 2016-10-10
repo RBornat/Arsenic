@@ -1001,10 +1001,10 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
            if Com.is_aux_assign ct then
              (let aas = actual_ancestors (order_of_stitch stitch, bnode) in
               if !verbose || !Settings.verbose_knots then 
-                Printf.printf "\n actual ancestors %s" (ONSet.to_string aas);
+                Printf.printf "\n regular ancestors %s" (ONSet.to_string aas);
               let check_ancestor (order,node as onode) =
                 if !verbose || !Settings.verbose_knots then 
-                  Printf.printf "\nchecking actual ancestor %s" (string_of_onode onode);
+                  Printf.printf "\nchecking regular ancestor %s" (string_of_onode onode);
                 let paths = OPGraph.paths node bnode opgraph in
                 let order_ok = match order with
                                | Uo -> is_uo_opath
@@ -1019,8 +1019,8 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
                 let paths = OPSet.filter opath_ok paths in
                 if OPSet.is_empty paths then
                   report (Error ((pos_of_stitch stitch),
-                                 Printf.sprintf "stitch %s induces actual ordering %s->%s, and there is no \
-                                                 corresponding actual (non-auxiliary) path"
+                                 Printf.sprintf "stitch %s induces regular ordering %s->%s, and there is no \
+                                                 corresponding regular (non-auxiliary) path"
                                                  (string_of_stitch stitch)
                                                  (string_of_onode onode)
                                                  (string_of_node bnode)
