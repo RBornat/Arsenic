@@ -471,7 +471,7 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
      post, spopt
   in
   
-  let find_actual_ancestors memofun =
+  let find_regular_ancestors memofun =
     let visited = ref NodeSet.empty in
     let aa (order,node) =
       if NodeSet.mem node !visited then ONSet.empty
@@ -500,9 +500,9 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
     aa
   in
   
-  let actual_ancestors = 
-    ONMap.vmemorec !verbose "actual_ancestors" string_of_onode ONSet.to_string id 
-                   find_actual_ancestors
+  let regular_ancestors = 
+    ONMap.vmemorec !verbose "regular_ancestors" string_of_onode ONSet.to_string id 
+                   find_regular_ancestors
   in
   
   let intf_from (i,_) = 
@@ -999,7 +999,7 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
       (match get_cid blab labmap with
        | CidSimplecom ct -> 
            if Com.is_aux_assign ct then
-             (let aas = actual_ancestors (order_of_stitch stitch, bnode) in
+             (let aas = regular_ancestors (order_of_stitch stitch, bnode) in
               if !verbose || !Settings.verbose_knots then 
                 Printf.printf "\n regular ancestors %s" (ONSet.to_string aas);
               let check_ancestor (order,node as onode) =
