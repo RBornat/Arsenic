@@ -393,6 +393,11 @@ let graph_prog {p_preopt=preopt; p_givopt=givopt; p_ts=threads; p_postopt=postop
          We partition the disjunction according to the loops it is enclosed in; if the
          disjunction of the 'loopback' constraints, in each case, is sufficient to cover
          the loop then all is well. Hmm.
+         
+      5. Auxiliary constraints mustn't add ordering to the proof. This is checked in 
+         checkproof. Dunno why: it would fit here, and it is a lacing error.
+         
+      5. An auxiliary->regular constraint's embroidery mustn't mention regular variables.
     *)
 
 let check_constraints_thread preopt postopt labmap opgraph thread =
@@ -419,6 +424,7 @@ let check_constraints_thread preopt postopt labmap opgraph thread =
   let check_constraints_stitch poslab stitch =
     let source = source_of_stitch stitch in
     let target = Cnode poslab.lablab in
+    
     (* stitches must reinforce so *)
     if OPSet.is_empty (so_opaths (OPGraph.paths source target opgraph)) then
       report 
@@ -477,8 +483,8 @@ let check_constraints_thread preopt postopt labmap opgraph thread =
      | CidFinal      _ -> badsource "stitch" "final state"
      | CidThreadPost _ -> badsource "stitch" "thread postcondition"
      | _               -> ()
-    )
-    (* ;
+    );
+    (* 
        (* reservation stitches may not source a store-conditional or initial state. *)
        (match is_reserved_stitch stitch, source_cid with
         | true, CidControl c -> (match c with
@@ -487,8 +493,112 @@ let check_constraints_thread preopt postopt labmap opgraph thread =
                                 )
         | true, CidInit _    -> badsource "reservation stitch" "initial state"
         | _                  -> () 
-       ) 
+       ); 
      *)
+  
+    (* ***** aux->regular constraints ***** *)
+    let is_aux_assign_node node =
+      match get_cid (label_of_node node) labmap with
+      | CidSimplecom ct -> Com.is_aux_assign ct
+      | _               -> false
+    in
+    if is_aux_assign_node source && not (is_aux_assign_node target) then
+      ((* we have aux-> regular. First we check that it adds no regular->regular
+          orderings; then we check that embroidery does not refer to regular variables
+        *)
+       (* if the nearest regular ancestors each have a regular route to target_cid,
+          then so does any node before them. If not, then there is an error. So
+          either way, we only have to check nearest regular ancestors. 'visited'
+          stops loops on auxiliary nodes.
+        *)
+       let visited = ref NodeSet.empty in
+       let rec nra node =
+         if NodeSet.mem node !visited then NodeSet.empty
+         else
+           (let lab = label_of_node node in
+            let cid = get_cid lab labmap in
+            match cid with
+            | CidSimplecom ct -> 
+                if Com.is_aux_assign ct then
+                  (visited := NodeSet.add node !visited;
+                   let fstitch set stitch =
+                     NodeSet.union set (nra (source_of_stitch stitch))
+                   in
+                   Knot.fold fstitch NodeSet.empty ct.tripletknot
+                  )
+                else
+                  NodeSet.singleton node
+            | _ -> NodeSet.singleton node
+           )
+       in
+       let nearest_regular_ancestors = nra source in
+       if !verbose || !Settings.verbose_knots then 
+         Printf.printf "\nnearest regular ancestors of %s->%s are %s" 
+            (string_of_node source)
+            (string_of_node target)
+            (NodeSet.to_string nearest_regular_ancestors);
+       
+       (* for each regular ancestor, partition paths from it to target into those
+          which pass through the set 'visited' and those which do not. Each path in the
+          first set must be represented in the second, with the same or stronger 
+          ordering.
+        *)
+       let check_ancestor node =
+         if !verbose || !Settings.verbose_knots then 
+           Printf.printf "\nchecking regular ancestor %s !visited=%s" 
+                         (string_of_node node)
+                         (NodeSet.to_string !visited);
+         let paths = OPGraph.paths node target opgraph in
+         if !verbose || !Settings.verbose_knots then 
+           Printf.printf "\npaths %s to %s = %s" 
+                         (string_of_node node)
+                         (string_of_node target)
+                         (OPSet.to_string paths);
+         let is_visited (order, seq, passed) = not (NodeSet.is_empty (NodeSet.inter !visited passed)) in
+         let aux_paths, regular_paths = OPSet.partition is_visited paths in
+         if !verbose || !Settings.verbose_knots then 
+           Printf.printf "\naux_paths=%s\nregular_paths=%s" 
+                         (OPSet.to_string aux_paths)
+                         (OPSet.to_string regular_paths);
+         let check_aux_path (order,_,_) =
+           let order_ok = match order with
+                          | Uo -> is_uo_opath
+                          | Bo -> is_bo_opath
+                          | Lo -> is_lo_opath
+                          | _  -> raise (Invalid_argument ("opath_order_ok " ^ string_of_order order))
+           in
+           if not (OPSet.exists order_ok regular_paths) then
+             report (Error ((pos_of_stitch stitch),
+                            Printf.sprintf "stitch %s induces %s ordering between regular nodes %s and %s, \
+                                            but there is no \
+                                            corresponding regular (non-auxiliary) path"
+                                            (string_of_order order)
+                                            (string_of_stitch stitch)
+                                            (string_of_node node)
+                                            (string_of_node target)
+                           )
+                  )
+         in
+         OPSet.iter check_aux_path (OPSet.filter (not <.> is_so_opath) aux_paths)
+       in
+       NodeSet.iter check_ancestor nearest_regular_ancestors;
+       
+       (* now check that the embroidery doesn't deal with regular variables *)
+       let embroidery = assertion_of_stitch stitch in
+       let frees = Formula.frees embroidery in
+       let freereals = NameSet.filter Name.is_realvar frees in
+       if not (NameSet.is_empty freereals) then
+         report (Error (embroidery.fpos,
+                        Printf.sprintf "auxiliary -> regular constraint embroidery %s \
+                                                     mentions real %s"
+                               (string_of_formula embroidery)
+                               (Listutils.prefixed_phrase_of_list Name.string_of_var
+                                       "variable" "variables"
+                                       (NameSet.elements freereals)
+                               )
+                       )
+                )
+      );
   in
   let check_constraints_knot poslab knot =
     (* check the stitches *)

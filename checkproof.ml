@@ -338,21 +338,6 @@ type onode = order * node
 
 let string_of_onode (o,n) = Printf.sprintf "%s %s" (string_of_order o) (string_of_node n)
 
-module ONSet = MySet.Make (struct type t        = onode
-                                  let compare   = Pervasives.compare
-                                  let to_string = string_of_onode
-                           end
-                          )
-
-module ONMap = MyMap.Make (struct type t        = onode
-                                  let compare   = Pervasives.compare
-                                  let to_string = string_of_onode
-                           end
-                          )
-
-let onset_reorder o onset = 
-  ONSet.map (fun (o',n) -> Order.combine o o',n) ONSet.of_list onset
-  
 let checkproof_thread check_taut ask_taut ask_sat avoided 
                       preopt postopt givopt nintfs 
                       threadnum knotmap labmap opgraph 
@@ -469,40 +454,6 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
         );
       *)
      post, spopt
-  in
-  
-  let find_regular_ancestors memofun =
-    let visited = ref NodeSet.empty in
-    let aa (order,node) =
-      if NodeSet.mem node !visited then ONSet.empty
-      else
-        (let lab = label_of_node node in
-         let cid = get_cid lab labmap in
-         match cid with
-         | CidSimplecom ct -> 
-             if Com.is_aux_assign ct then
-               (visited := NodeSet.add node !visited;
-                let fstitch set stitch =
-                  ONSet.union set 
-                    (onset_reorder order 
-                       (memofun (order_of_stitch stitch, source_of_stitch stitch))
-                    )
-                in
-                let r = Knot.fold fstitch ONSet.empty ct.tripletknot in
-                visited := NodeSet.remove node !visited;
-                r
-               )
-             else
-               ONSet.singleton (order,node)
-         | _ -> ONSet.singleton (order,node)
-        )
-    in
-    aa
-  in
-  
-  let regular_ancestors = 
-    ONMap.vmemorec !verbose "regular_ancestors" string_of_onode ONSet.to_string id 
-                   find_regular_ancestors
   in
   
   let intf_from (i,_) = 
@@ -989,49 +940,7 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
         check_lo aintf
       in
       List.iter cassign assigns;
-        
-      (* check constraints from auxiliary assignments *)
-      let is_aux_assign_node node =
-        match get_cid (label_of_node node) labmap with
-        | CidSimplecom ct -> Com.is_aux_assign ct
-        | _               -> false
-      in
-      (match get_cid blab labmap with
-       | CidSimplecom ct -> 
-           if Com.is_aux_assign ct then
-             (let aas = regular_ancestors (order_of_stitch stitch, bnode) in
-              if !verbose || !Settings.verbose_knots then 
-                Printf.printf "\n regular ancestors %s" (ONSet.to_string aas);
-              let check_ancestor (order,node as onode) =
-                if !verbose || !Settings.verbose_knots then 
-                  Printf.printf "\nchecking regular ancestor %s" (string_of_onode onode);
-                let paths = OPGraph.paths node bnode opgraph in
-                let order_ok = match order with
-                               | Uo -> is_uo_opath
-                               | Bo -> is_bo_opath
-                               | Lo -> is_lo_opath
-                               | _  -> raise (Invalid_argument ("opath_order_ok " ^ string_of_order order))
-                in
-                let opath_ok (_,_,nodeset as opath) =
-                    order_ok opath &&
-                    not (NodeSet.exists is_aux_assign_node nodeset) 
-                in
-                let paths = OPSet.filter opath_ok paths in
-                if OPSet.is_empty paths then
-                  report (Error ((pos_of_stitch stitch),
-                                 Printf.sprintf "stitch %s induces regular ordering %s->%s, and there is no \
-                                                 corresponding regular (non-auxiliary) path"
-                                                 (string_of_stitch stitch)
-                                                 (string_of_onode onode)
-                                                 (string_of_node bnode)
-                                )
-                         )
-              in
-              List.iter check_ancestor (ONSet.elements aas)
-             )
-       | _  -> ()
-      )
-
+      
     in
     if !verbose || !Settings.verbose_knots then
       Printf.printf "\n-- looking at knot %s inneropt %s" 
