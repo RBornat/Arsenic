@@ -13,7 +13,7 @@ guar [[A].A%W=0/\lh=A/\_B(tk=A) | tk:=A+1;
        [A].A%W=0/\_B(lh=A=tk-1) | lh:=A+1
      ]
 
-macro loopinv = rauxw>=0/\rauxw%W=0/\exists LH (rauxw-W<LH=lh<=rauxw/\sofar(lh<=rauxw)/\_B(LH<=tk<=rauxw))
+macro loopinv = rauxw>=0/\rauxw%W=0/\exists L (rauxw-W<L=lh<=rauxw/\sofar(lh<=rauxw)/\_B(L<=tk<=rauxw))
 
 macro lhseen = r1%W=0/\0<=lh=r1=rauxw/\sofar(lh<=r1)/\_B(tk=r1)
 
