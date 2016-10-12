@@ -75,19 +75,24 @@ type tmap = opset NodeMap.t
 
 module type OPGraphsig = sig
   type opgraph
-  val empty    : opgraph
-  val is_empty : opgraph -> bool
+  val empty      : opgraph
+  val is_empty   : opgraph -> bool
+  
   val to_assoc   : opgraph -> ((node * node) * opset) list
   val from_assoc : ((node * node) * opset) list -> opgraph
+  
   val to_string  : string -> opgraph -> string
   val add_edge   : order -> node -> node -> opgraph -> opgraph
   val add_edges  : order -> node list -> node list -> opgraph -> opgraph
+  
   val transitive_closure : opgraph -> opgraph
+  val inverse : opgraph -> opgraph
 
   val paths      : node -> node -> opgraph -> opset 
       (* almost-synonym for find, returns empty opset rather than raising Not_found *)
   val pathfold   : (node -> node -> opath -> 'a -> 'a) -> opgraph -> 'a -> 'a
   val pathfilter : (node -> node -> opath -> bool) -> opgraph -> opgraph
+  
   val union : opgraph -> opgraph -> opgraph
 end
 
@@ -268,4 +273,11 @@ module OPGraph = struct
 
   let union og1 og2 =
     mymerge (TMap.mymerge OPSet.union) og1 og2
+    
+  let inverse og =
+    let inv_assoc ((source,dest),opset) =
+      let op_rev (order,path,passed) = order, List.rev path, passed in
+      (dest,source), OPSet.map op_rev OPSet.of_list opset
+    in
+    from_assoc (List.map inv_assoc (to_assoc og))
 end

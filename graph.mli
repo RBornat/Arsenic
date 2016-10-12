@@ -25,12 +25,17 @@ module type OPGraphsig = sig
   type opgraph
   val empty      : opgraph
   val is_empty   : opgraph -> bool
+  
   val to_assoc   : opgraph -> ((Node.node * Node.node) * opset) list
   val from_assoc : ((Node.node * Node.node) * opset) list -> opgraph
+  
   val to_string  : string -> opgraph -> string
+  
   val add_edge   : Order.order -> Node.node -> Node.node -> opgraph -> opgraph
   val add_edges  : Order.order -> Node.node list -> Node.node list -> opgraph -> opgraph
+  
   val transitive_closure : opgraph -> opgraph
+  val inverse : opgraph -> opgraph
 
   val paths      : Node.node -> Node.node -> opgraph -> opset 
      (* not synonym for find: returns empty opset rather than raising Not_found *)
