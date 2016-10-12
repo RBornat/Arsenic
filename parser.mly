@@ -313,13 +313,13 @@
                  first component of multiple assignment");
          (* if the left is real location and the right is a tuple, first tuple element must be real *)
          (match is_auxloc loc, e.fnode with
-          | true, Tuple (f::fs) ->
-              ignore (check_anypure ok_logc f);
+          | false, Tuple (f::fs) ->
+              ignore (check_realpure ok_logc f);
               List.iter (ignore <.> check_anypure ok_logc) fs
-          | true, _ ->
-              ignore (check_anypure ok_logc e)
           | false, _ ->
               ignore (check_realpure ok_logc e)
+          | true, _ ->
+              ignore (check_anypure ok_logc e)
          )
        in
        check_single true (List.hd loces);
