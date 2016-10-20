@@ -536,7 +536,7 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
     check_taut intfdesc.ipos stringfun query
   in
   
-  (* a constraint b->c is interfered with by an assign a if there is an so-tree path
+  (* a constraint b->c is lo-interfered with by an assign a if there is an so-tree path
      containing (instances of) a, b and c which can be reordered so that a comes between
      b and c. In the proof checker this means that either
        1. There is an so path b..c which includes a.
@@ -890,7 +890,7 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
               (* we want the internal interference, unweakened for the guarantee *)
               let reportpaths direction opset =
                 let singpre =
-                  Printf.sprintf "there is %s '%s' path"
+                  Printf.sprintf "there is %s '%s' so path"
                                  (match direction with
                                   | InsideLo 
                                   | AfterLo  -> "an"
@@ -915,7 +915,7 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
               in
               let stringfun () =
                 Printf.sprintf "lo-parallel (internal) stability of %s against interference %s of command %s\
-                                \n   -- %s"
+                                \n   -- %s and no corresponding lo path"
                                (string_of_formula bassert)
                                (string_of_intfdesc aintf)
                                (string_of_label at.tripletlab.lablab)
