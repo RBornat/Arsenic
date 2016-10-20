@@ -37,7 +37,7 @@
   
   let simplecomadorn ipre c = Com.simplecomadorn (get_sourcepos()) ipre c
   
-  let structsimplecomadorn c = Com.structsimplecomadorn (get_sourcepos()) c
+  let structcomadorn c = Com.structcomadorn (get_sourcepos()) c
   
   let intfadorn   i = Intfdesc.intfadorn (get_sourcepos()) i
   
@@ -891,10 +891,10 @@ formulalist:
   |                                     {[]}
   
 structcom:
-  | IF condition THEN seq ELSE seq FI   {structsimplecomadorn(If ($2,$4,$6))}
-  | IF condition THEN seq FI            {structsimplecomadorn(If ($2,$4,[]))}
-  | WHILE condition DO seq OD           {structsimplecomadorn(While ($2,$4))}
-  | DO seq UNTIL condition              {structsimplecomadorn(DoUntil ($2,$4))}
+  | IF condition THEN seq ELSE seq FI   {structcomadorn(If ($2,$4,$6))}
+  | IF condition THEN seq FI            {structcomadorn(If ($2,$4,[]))}
+  | WHILE condition DO seq OD           {structcomadorn(While ($2,$4))}
+  | DO seq UNTIL condition              {structcomadorn(DoUntil ($2,$4))}
 
 condition:
   | preknot ipreopt loclabel COLON conditionthing       

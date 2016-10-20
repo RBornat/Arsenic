@@ -57,7 +57,7 @@ let tripletadorn spos knot lab tof = {tripletpos=spos; tripletknot=knot; triplet
 
 let simplecomadorn spos ipre scomnode = {sc_pos = spos; sc_ipreopt = ipre; sc_node=scomnode}
 
-let structsimplecomadorn spos node = {structcompos = spos; structcomnode=node}
+let structcomadorn spos node = {structcompos = spos; structcomnode=node}
 
 let _simplecomrec = simplecomadorn Sourcepos.dummy_spos
 
