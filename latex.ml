@@ -76,7 +76,63 @@ let aux = ref true
 
 let show_aux () =
   !aux || !lacing = Embroider
-  
+
+let is_aux_assign_map = ref (Node.NodeMap.empty: bool NodeMap.t)
+let init_lab = ref ""
+
+let scan_for_aux_assign seq =
+  is_aux_assign_map := Node.NodeMap.empty;
+  let do_node n b = 
+    is_aux_assign_map := NodeMap.add n b !is_aux_assign_map 
+  in
+  let rec sfaa com =
+    let do_sct sct =
+      let lab = sct.tripletlab.lablab in
+      do_node (Cnode lab) (Com.is_aux_assign sct)
+    in
+    let do_condition c =
+      match c with
+      | CAssign sct -> do_sct sct
+      | CExpr   ft  -> let lab = ft.tripletlab.lablab in
+                       do_node (CEnode (lab,true)) false;
+                       do_node (CEnode (lab,false)) false;
+    in
+    match com with
+    | Com sct      -> do_sct sct
+    | Structcom sc ->
+       (match sc.structcomnode with
+        | If (c,s1,s2)  -> do_condition c; do_seq s1; do_seq s2
+        | While (c,s)   -> do_condition c; do_seq s
+        | DoUntil (s,c) -> do_seq s; do_condition c 
+       )
+  and do_seq s = List.iter sfaa s 
+  in
+  do_node (Cnode !init_lab) false;
+  do_seq seq
+
+let rec aux_filter_seq seq =
+  (* actually a kind of fold *)
+  let afs cs c =
+    match c with
+    | Com sct      -> if Com.is_aux_assign sct then cs else c::cs
+    | Structcom sc ->
+       let do_sc scn = Structcom (structcomadorn sc.structcompos scn) in
+       (match sc.structcomnode with
+        | If (c,s1,s2)  -> do_sc (If (c, aux_filter_seq s1, aux_filter_seq s2))
+        | While (c,s)   -> do_sc (While (c, aux_filter_seq s))
+        | DoUntil (s,c) -> do_sc (DoUntil (aux_filter_seq s, c))
+       )::cs
+  in
+  if show_aux() then seq else List.rev (List.fold_left afs [] seq)
+
+let aux_filter_knot knot =
+  let is_aux_stitch stitch =
+    let source = source_of_stitch stitch in
+    try not (NodeMap.find source !is_aux_assign_map)
+    with Not_found -> raise (Error (string_of_node source ^ " not in aux_assign_map"))
+  in
+  if show_aux() then knot else Knot.filter is_aux_stitch knot
+
 let twocolopt = Some ("r@" ^ latexarg (latexcommand "intfspace" None []) ^ "l")
 
 let colsep sep indent = sep ^ " " ^ latexnl ^ "\n" ^ indent
@@ -373,7 +429,7 @@ let latex_of_knot =
     | KnotOr  _   , KnotOr _ -> lok knot
     | _                      -> "(" ^ lok knot ^ ")"
   in
-  lok
+  lok <.> aux_filter_knot
 
 let latex_of_assign a =
   let soa lhs rhs = lhs ^ (string_of_assignop ()) ^ rhs in
@@ -397,7 +453,14 @@ let latex_of_assign a =
              | true, Tuple _       -> "(" ^ latex_of_formula e ^ ")"
              | _                   -> latex_of_formula e
            in
-           soa (string_of_list latex_of_location "," locs) (string_of_list string_of_rhs "," es)
+           soa (if show_aux() 
+                then string_of_list latex_of_location "," locs
+                else latex_of_location (List.hd locs)
+               ) 
+               (if show_aux() 
+                then string_of_list string_of_rhs "," es
+                else string_of_rhs (List.hd es)
+               )
       )
   | RsbecomeLocs (rslocs) -> 
       ( (* let op = if b then LoadReserve else LocalAssign in *)
@@ -615,7 +678,8 @@ let latex_of_thread wrapper {t_hdrs=headers; t_body=body; t_postopt=postopt; t_t
     match body with
     | Threadseq []  -> None, None
     | Threadseq seq -> 
-        Some (latex_of_seq false trisep indent seq),
+        scan_for_aux_assign seq;
+        Some (latex_of_seq false trisep indent (aux_filter_seq seq)),
         (latex_solast latex_of_knot postopt &~~ embroider)
     | Threadfinal f -> Some (latexcommand "assert" None [latex_of_formula f]),
                        None
@@ -665,7 +729,7 @@ let latex_of_outerassert init (poslab, f) =
 
 let latex_of_program filename {p_hdrs=headers; p_ts = ts; p_postopt=postopt } =
   let latex_of_header = function
-  | AssertHdr (poslab, f) -> latex_of_outerassert true (poslab, f)
+  | AssertHdr (poslab, f) -> init_lab := poslab.lablab; latex_of_outerassert true (poslab, f)
   | GivenHdr  g           -> latexcommand "given" None [latex_of_formula g]
   | MacroHdr (m,ps,f)     -> latex_of_macro m ps f
   | TMacroHdr (m,ps,t)    -> latex_of_tmacro m ps t

@@ -21,6 +21,10 @@ and knotnode =
   | KnotAnd    of knot * knot
   | KnotAlt    of knot * knot
   
+let _KnotOr k1 k2 = KnotOr (k1,k2)
+let _KnotAnd k1 k2 = KnotAnd (k1,k2)
+let _KnotAlt k1 k2 = KnotAlt (k1,k2)
+
 let alt_token = "\\->/"
 
 let rec string_of_knot knot = 
@@ -32,6 +36,26 @@ let rec string_of_knot knot =
 
 let knotadorn spos knotnode = { knotloc=spos; knotnode=knotnode }
 
+(* ******************** a filter for knots, why not? ************************ *)
+
+let rec filter pstitch knot =
+  let is_empty k = match k.knotnode with
+                   | SimpleKnot [] -> true
+                   | _             -> false
+  in
+  let doit cons k1 k2 =
+    let k1 = filter pstitch k1 in
+    let k2 = filter pstitch k2 in
+    if is_empty k1 then k2 else
+    if is_empty k2 then k1 else
+      knotadorn knot.knotloc (cons k1 k2)
+  in
+  match knot.knotnode with
+  | SimpleKnot ss   -> knotadorn knot.knotloc (SimpleKnot (List.filter pstitch ss))
+  | KnotOr  (k1,k2) -> doit _KnotOr k1 k2
+  | KnotAnd (k1,k2) -> doit _KnotAnd k1 k2
+  | KnotAlt (k1,k2) -> doit _KnotAlt k1 k2
+                       
 (* ******************** a fold and iter for knots, why not? ************************ *)
 
 let rec fold fstitch v knot =
