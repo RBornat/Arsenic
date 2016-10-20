@@ -572,8 +572,8 @@ let check_constraints_thread preopt postopt labmap opgraph thread =
                             Printf.sprintf "stitch %s induces %s ordering between regular nodes %s and %s, \
                                             but there is no \
                                             corresponding regular (non-auxiliary) path"
-                                            (string_of_order order)
                                             (string_of_stitch stitch)
+                                            (string_of_order order)
                                             (string_of_node node)
                                             (string_of_node target)
                            )
