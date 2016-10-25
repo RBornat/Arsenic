@@ -93,8 +93,7 @@ tokenringtest:
 #	./Test proofs/tokenringsingleassert.proof
 	./Test proofs/tokenringsingleifthen.proof
 	./Test proofs/tokenringsingleifthenaux.proof
-	./Test proofs/tokenring3assert.proof
-	./Test proofs/tokenring3ifthen.proof
+	./Test proofs/tokenring4ifthen.proof
 
 coherencetest:
 	./Test proofs/CoRR0.proof
