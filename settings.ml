@@ -111,4 +111,5 @@ let all_valid = ref false
 let allow_special_formulas = ref false
 let sp_unchanged = ref true
 let allow_bu_coincidence = ref false
+let ignore_irrelevant_BoUo = ref true
 

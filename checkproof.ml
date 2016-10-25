@@ -1043,11 +1043,12 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
   | Threadseq []  -> ()
   | Threadseq seq -> 
       (* If we have a given rely, we check it for bo stability. This is somewhat too 
-         severe, but never mind: it just introduces incompleteness. Hook we make sure that
+         severe, but never mind: it just introduces incompleteness. Then we make sure that
          the other threads' guarantees are included in the rely.
          
          If we don't have a given rely, we do the cross-product check-bo-stability thing.
        *)
+      let threadfrees = Thread.frees thread in
       let cinflight ((x, xid as xintf),(y,yid as yintf)) = 
         let stringfun order () = 
           Printf.sprintf "inter-thread %s (inflight) stability of %s (from %s) against %s (from %s)" 
@@ -1059,8 +1060,18 @@ let checkproof_thread check_taut ask_taut ask_sat avoided
                                            (Intfdesc.pre_frees xid)
                             )
         then
-          (avoided xid.ipos "(by free names) Z3 check" (stringfun Bo);
-           avoided xid.ipos "(by free names) Z3 check" (stringfun Uo) (* as well *)
+          (avoided xid.ipos "(by free names of interference) Z3 check" (stringfun Bo);
+           avoided xid.ipos "(by free names of interference) Z3 check" (stringfun Uo) (* as well *)
+          )
+        else
+        if !Settings.ignore_irrelevant_BoUo &&
+           x>0 && y>=0 && (NameSet.is_empty (NameSet.inter (Intfdesc.assigned xid) threadfrees)
+                           ||
+                           NameSet.is_empty (NameSet.inter (Intfdesc.assigned yid) threadfrees)
+                          )
+        then
+          (avoided xid.ipos "(by free names of thread) Z3 check" (stringfun Bo);
+           avoided xid.ipos "(by free names of thread) Z3 check" (stringfun Uo) (* as well *)
           )
         else
           (let boq = bo_stable_query xid.irec yid.irec in

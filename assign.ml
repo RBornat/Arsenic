@@ -100,21 +100,23 @@ let loces = function
   | LocbecomesEs ((* b, *) loces) -> loces
   | assign                 -> raise (Invalid_argument ("Assign.loces " ^ string_of_assign assign))
 
-let frees assign = 
+let foa frees assign = 
   let loc_frees = function
     | VarLoc         v -> NameSet.singleton v
   in
   match assign with
-  | RbecomesE  (r,e)       -> NameSet.add r (Formula.frees e) 
+  | RbecomesE  (r,e)              -> NameSet.add r (Formula.fof frees e) 
   | LocbecomesEs ((* b, *) loces) -> 
       List.fold_left (fun set (location,e) -> NameSet.union set (NameSet.union (loc_frees location) (Formula.frees e)))
-                     NameSet.empty
+                     frees
                      loces
   | RsbecomeLocs ((* b, *) rsvs)  -> 
       List.fold_left (fun set (rs,location) -> NameSet.union set (NameSet.union (loc_frees location) (NameSet.of_list rs)))
-                     NameSet.empty
+                     frees
                      rsvs
-                     
+
+let frees = foa NameSet.empty
+
 (* designed to be folded *)
 let formulas fs = function
   | RbecomesE (r,e)         -> e::fs

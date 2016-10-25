@@ -123,9 +123,11 @@ let pre intfdesc =
      {intfdesc with irec={intfdesc.irec with i_pre = preprop i.i_pre}}
  *)
 
-let frees intfdesc = 
-  let frees = Formula.fof (Assign.frees (assign intfdesc)) (pre intfdesc) in
-  NameSet.diff frees (binders intfdesc)
+let fointfd frees intfdesc = 
+  let ifrees = Formula.fof (Assign.foa frees (assign intfdesc)) (pre intfdesc) in
+  NameSet.union frees (NameSet.diff ifrees (binders intfdesc))
+  
+let frees = fointfd NameSet.empty
 
 let pre_frees intfdesc =
   NameSet.diff (Formula.frees (pre intfdesc)) (binders intfdesc)

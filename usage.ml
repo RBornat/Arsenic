@@ -30,6 +30,10 @@ let opts = Arg.align
                     Printf.sprintf " don't speculate propagation (default %B)" !param_LocalSpec);
                 ("-allow_bu_coincidence", Arg.Bool (set_bool allow_bu_coincidence), 
                     Printf.sprintf " allow temporal coincidences in _B and _U (default %B)" !allow_bu_coincidence);
+                ("-ignore_irrelevant_BoUo", Arg.Bool (set_bool ignore_irrelevant_BoUo),
+                    Printf.sprintf " ignore Bo/Uo rely effects of interference that doesn't affect thread \
+                                    (default %B)" 
+                    !ignore_irrelevant_BoUo);
                 ("-treeformulas", Arg.Bool (set_bool tree_formulas), 
                     Printf.sprintf " print big formulas as trees in error reports (default %B)" !tree_formulas);
                 ("-tree_formulas", Arg.Bool (set_bool tree_formulas), 

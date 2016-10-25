@@ -259,5 +259,39 @@ let rec simplecomfold fsimplecom v = function
        | DoUntil (s, c) ->
            fcond (List.fold_left fseq v s) c
       )
-  
-  
+ 
+ (* *************************** frees of com ************************* *)
+ 
+ let rec focom frees com =
+   let fotriplet fo_of frees t = 
+     let kfrees = Knot.fok frees t.tripletknot in
+     fo_of kfrees t.tripletof
+   in
+   let fosct = fotriplet (fun frees sc ->
+                            let ifrees =
+                              match sc.sc_ipreopt with
+                              | Some ipre -> Formula.fof frees ipre
+                              | None      -> frees
+                            in
+                            match sc.sc_node with
+                               | Skip     -> ifrees
+                               | Assert f -> Formula.fof ifrees f
+                               | Assign a -> Assign.foa ifrees a
+                         )
+   in
+   let foft = fotriplet Formula.fof in
+   match com with
+   | Com      sct -> fosct frees sct
+   | Structcom sc ->
+       let focond frees c =
+         match c with
+         | CExpr    ft -> foft frees ft
+         | CAssign sct -> fosct frees sct
+       in
+       let foseq = List.fold_left focom in
+       match sc.structcomnode with
+       | If (c,s1,s2)  -> List.fold_left foseq (focond frees c) [s1;s2]
+       | While (c,s)   -> foseq (focond frees c) s
+       | DoUntil (s,c) -> foseq (focond frees c) s
+
+let frees = focom Name.NameSet.empty  

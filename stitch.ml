@@ -75,3 +75,13 @@ let assertion_of_stitch s = s.stitchembroidery
 let is_go = Order.is_go <.> order_of_stitch
 
 (* let is_reserved_stitch s = match locopt_of_stitch s with Some _ -> true | _ -> false *)
+
+let fostitch frees {stitchspopt = spopt; stitchembroidery = embroidery} = 
+  let spfrees =
+    match spopt with
+    | Some f -> Formula.fof frees f
+    | None   -> frees
+  in
+  Formula.fof spfrees embroidery
+  
+let frees = fostitch NameSet.empty

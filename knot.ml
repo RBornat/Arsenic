@@ -77,7 +77,11 @@ let iter fstitch = fold (fun () -> fstitch) ()
      in
      fold srev []
  *)
- 
+
+let fok = fold Stitch.fostitch
+
+let frees = fok NameSet.empty
+
 (* ******************** exists for knots, why not? ************************ *)
 
 let rec exists pstitch knot =

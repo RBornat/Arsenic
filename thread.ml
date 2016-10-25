@@ -120,3 +120,25 @@ let tripletfold fcom ff v thread =
   | Some intfs -> List.fold_left intff v intfs
   | None       -> v
  *)
+ 
+ let fot frees { t_guar    = guar;
+                 t_body    = body;
+                 t_postopt = postopt;
+                 t_relyopt = relyopt
+               } =
+   let frees = List.fold_left Intfdesc.fointfd frees guar in
+   let frees = 
+     match body with
+     | Threadseq   s -> List.fold_left Com.focom frees s
+     | Threadfinal f -> Formula.fof frees f
+   in
+   let frees =
+     match postopt with
+     | Some knot -> Knot.fok frees knot
+     | None      -> frees
+   in
+   match relyopt with
+   | Some rely -> List.fold_left Intfdesc.fointfd frees rely
+   | None      -> frees
+
+let frees = fot Name.NameSet.empty
