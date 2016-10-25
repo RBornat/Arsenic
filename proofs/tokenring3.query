@@ -1,9 +1,0 @@
-# is the loop invariant stable against the rely? Should succeed.
-lh0=1 => _B(tk0=1/\lh1=0/\tk1=0/\lh2=0/\tk2=0) _against        lh1=1/\_B(lh2=0/\lh0=0/\tk2=0/\tk0=0) | lh1:=0;
-lh0=1 => _B(tk0=1/\lh1=0/\tk1=0/\lh2=0/\tk2=0) _against        tk1=1/\_B(lh2=0/\lh0=0/\tk2=0/\tk0=0) | tk1:=0;
-lh0=1 => _B(tk0=1/\lh1=0/\tk1=0/\lh2=0/\tk2=0) _against               _B(lh2=0/\lh0=0/\tk2=0/\tk0=0) | tk2:=1;
-lh0=1 => _B(tk0=1/\lh1=0/\tk1=0/\lh2=0/\tk2=0) _against _B(tk2=1/\lh1=0/\lh2=0/\lh0=0/\tk1=0/\tk0=0) | lh2:=1;
-lh0=1 => _B(tk0=1/\lh1=0/\tk1=0/\lh2=0/\tk2=0) _against        lh2=1/\_B(lh0=0/\lh1=0/\tk0=0/\tk1=0) | lh2:=0;
-lh0=1 => _B(tk0=1/\lh1=0/\tk1=0/\lh2=0/\tk2=0) _against        tk2=1/\_B(lh0=0/\lh1=0/\tk0=0/\tk1=0) | tk2:=0;
-lh0=1 => _B(tk0=1/\lh1=0/\tk1=0/\lh2=0/\tk2=0) _against               _B(lh0=0/\lh1=0/\tk0=0/\tk1=0) | tk0:=1;
-lh0=1 => _B(tk0=1/\lh1=0/\tk1=0/\lh2=0/\tk2=0) _against _B(tk0=1/\lh2=0/\lh0=0/\lh1=0/\tk2=0/\tk1=0) | lh0:=1;
