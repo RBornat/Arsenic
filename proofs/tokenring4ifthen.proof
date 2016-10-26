@@ -5,7 +5,6 @@ given {W=4}
 { aa:lh0=1/\lh1=lh2=lh3=0/\tk0=1/\tk1=tk2=tk3=0/\auxP=auxQ=0 } 
 
 ----------------------
-macro ours(N) = N%W=0
 macro notyet(N) = sofar(auxP<=N/\auxQ<=N)
 macro loopinv =
   rauxN%W=0/\rauxN>=0/\rauxN-W<=auxQ<=auxP<=rauxN/\notyet(rauxN)
@@ -40,20 +39,20 @@ do
     if {* lo d: r2=rauxN+1>0/\lhseen/\_B(tk0=r2) *}                              dd: r2!=0 
     then
         {* lo dd(t): r2=rauxN+1>0/\lhseen/\_B(tk0=r2) *}                            
-            [* rauxN%W=0/\rauxN>=0/\_B(auxP=rauxN/\tk0=rauxN+1)/\auxQ=rauxN *]      f: tk0:=0; 
+            [* rauxN%W=0/\rauxN>=0/\_B(auxP=tk0-1=rauxN)/\auxQ=rauxN *]             f: tk0:=0; 
         {* lo dd(t): r2=rauxN+1>0/\lhseen *}                                         
             [* r2=rauxN+1/\rauxN%W=0/\rauxN>=0/\_B(auxP=rauxN)/\auxQ=rauxN *]       g: tk1:=r2+1; 
-        {* lo c: lh0=0; lo f: r2=auxP+1>0/\tk0=0/\ours(auxP); lo g: lhseen *}       y: rauxN := rauxN+W;
+        {* lo c: lh0=0; lo f: r2=auxP+1>0/\tk0=0/\auxP%W=0; lo g: lhseen *}         y: rauxN := rauxN+W;
         {* lo f: tk0=0/\_B(auxP%W=0);
            lo g: exists N (N%W=0/\N>=0/\_B(auxP=N)/\tk1=r2+1=N+2/\notyet(N)); 
-           lo c: lh0=0/\auxQ=auxP/\ours(auxP); 
-           lo y: rauxN=auxP+W/\ours(auxP)                                  *}       ghbar: skip;
+           lo c: lh0=0/\auxQ=auxP/\auxP%W=0; 
+           lo y: rauxN=auxP+W/\auxP%W=0                                  *}         ghbar: skip;
         (* ----- barrier -------------- *)
         {* bo ghbar: exists N (N%W=0/\N>=0/\lh0=0/\rauxN=N+W/\r2=N+1/\_B(auxP=N/\auxQ=N)/\notyet(N)) *} 
         [* exists N (N%W=0/\N>=0/\r2=N+1/\rauxN=N+W/\_B(auxP=N/\auxQ=N)) *]         z: auxP := r2;
         (* ----- barrier -------------- *)
         {* bo z: rauxN%W=0/\rauxN>=W/\_B(auxP=rauxN-W+1/\auxQ=rauxN-W)/\sofar(auxQ<=rauxN-W);
-           bo ghbar: lh0=0/\_B(tk1=r2+1/\auxQ=r2-1=rauxN-W)/\sofar(auxP<=rauxN-W+1/\auxQ<=rauxN-W)/\ours(rauxN) *}
+           bo ghbar: lh0=0/\_B(tk1=r2+1/\auxQ=r2-1=rauxN-W)/\sofar(auxP<=rauxN-W+1/\auxQ<=rauxN-W)/\rauxN%W=0 *}
                 [* r2=rauxN-W+1/\rauxN%W=0/\rauxN>=W/\_B(auxP=auxQ+1=tk1-1=r2) *]
                                                                                     h: lh1,auxQ:=1,r2
     fi
