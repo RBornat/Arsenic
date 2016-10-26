@@ -185,7 +185,8 @@ let sname s =
   
 let latex_of_name s =
   try sname (NameMap.find s !snamemap)
-  with Not_found -> if NameSet.mem s !macros then sname s else s
+  with Not_found -> if String.length s>1 then sname s else s
+                    (* if NameSet.mem s !macros then sname s else s *)
   
 let latex_sofirst string_of = function 
   | None   -> None
