@@ -3,12 +3,12 @@
 guarantee [ _B(x=0) | x:=1; _B(x=1) | y:=1 ]
 
 {* lo aa: _B(x=0) *}                                    a: x:=1;
-{* lo aa: !ouat(y=1); bo a: _B(x=1) *}                  b: y:=1
+{* lo aa: sofar(y!=1); bo a: _B(x=1) *} [* _B(x=1) *]   b: y:=1
 {* lo b: y=1\/y=2/\_c(y,1,2) since x=1 *}
 -------------------------
 guarantee [ true | y:=2 ]
 
-{* lo aa: !ouat(y=2) *}                                 c: y:=2;          
+{* lo aa: sofar(y!=2) *} [* true *]                     c: y:=2;          
 {* lo c: y=2\/y=1/\_c(y,2,1) *}                         d: r1:=x
 {* lo d: r1=0=>(y=2\/y=1/\_c(y,2,1) since x=0) *}
 -------------------------

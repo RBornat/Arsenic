@@ -1,8 +1,8 @@
 {aa: x=0}
 ---------------------
 guarantee [x=0 | x:=1; true | x:=2]
-{* lo aa: sofar(x=0) *}[* x=0 *]        a: x:=1;
-{* lo a: !ouat(x=2)/\x=1 *}             b: x:=2
+{* lo aa: sofar(x=0) *}      [* x=0 *]  a: x:=1;
+{* lo a: sofar(x!=2)/\x=1 *} [* true *] b: x:=2
 {* lo b: _c(x,1,2) *}
 ---------------------
 # there appears to be no way round the problem that the observation of r2 must be

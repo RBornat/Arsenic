@@ -2,21 +2,21 @@
 -------------------------
 guarantee [ true | x:=2 ]
 
-{* lo aa: !ouat(x=2) *}                         x: x:=2
+{* lo aa: sofar(x!=2) *} [* true *]                         x: x:=2
 -------------------------
 
-{* lo aa: true *}                               c: r1:=x;
-{* uo c : r1=2=>_U(x=2\/x=1/\_c(x,2,1)) *}      d: r2:=y 
+                                                            c: r1:=x;
+{* uo c : r1=2=>_U(x=2\/x=1/\_c(x,2,1)) *}                  d: r2:=y 
 {* lo d : r1=2/\r2=0=>(_U(x=2\/x=1/\_c(x,2,1)) since y=0) *}
 -------------------------
 guarantee [ true | y:=1 ]
 
-{* lo aa: !ouat(y=1) *}                         y: y:=1
+{* lo aa: !ouat(y=1) *}                                     y: y:=1
 -------------------------
 guarantee [ true | x:=1 ]
 
-{* lo aa: true *}                               a: r1:=y;
-{* uo a : r1=1=>_U(y=1); lo aa: !ouat(x=1) *}   b: x:=1  
+                                                            a: r1:=y;
+{* uo a : r1=1=>_U(y=1); lo aa: sofar(x!=1) *} [* true *]   b: x:=1  
 {* lo b : r1=1=>(_U(y=1) since x=1) *}
 -------------------------
 { zz: !(1:r1=2/\1:r2=0/\3:r1=1/\_c(x,1,2))  }

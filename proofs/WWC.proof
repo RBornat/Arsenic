@@ -2,7 +2,7 @@
 ----------------------
 guarantee [ x!=2 | x:=2 ]
 
-{* lo aa: !ouat(x=2) *}                         e: x:=2
+{* lo aa: sofar(x!=2) *} [* x!=2 *]             e: x:=2
 ----------------------
 guarantee [ _B(y=(0,0)/\ouat(x=2)) | y:=1,2;
             [A]._B(y=(0,0))/\A!=2  | y:=1,A;
@@ -16,8 +16,8 @@ guarantee [ _B(y=(0,0)/\ouat(x=2)) | y:=1,2;
 guarantee [ true | x:=1 ]
 
 {* lo aa: (y=(1,2)=>ouat(x=2))/\sofar(x!=1) *}  c: r1,raux_:=y;
-{* lo c: (r1=1=>exists A(y=(1,A)/\(A=2=>ouat(x=2))))/\!ouat(x=1) *}     
-                                                d: x:=1 
+{* lo c: (r1=1=>exists A(y=(1,A)/\(A=2=>ouat(x=2))))/\sofar(x!=1) *}     
+         [* true *]                             d: x:=1 
 {* lo d: r1=1=>exists A(y=(1,A))/\(y=(1,2)=>_c(x,2,1)) *}
 
 -----------------------
