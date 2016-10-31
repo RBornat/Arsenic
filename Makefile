@@ -124,7 +124,6 @@ coherencetest:
 	./Test proofs/WRW+WR.proof
 	./Test proofs/IRRWIW.proof
 	./Test proofs/WRR+2W.proof
-	./Test proofs/IRRWIW.proof
 	./Test proofs/2+2W.proof
 	# ./Arsenic proofs/WRW+2W.proof
 	./Test -SCloc false proofs/nonSCloctermination.proof
