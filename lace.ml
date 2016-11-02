@@ -770,7 +770,7 @@ let check_constraints_prog {p_preopt=preopt; p_givopt=givopt; p_ts=threads; p_po
 
 (* *********************** no universalised temporal coincidences **************************** *)
 
-let check_coincidence_bu binders f =
+let check_coincidence_absence binders f =
   let f' = Modality.enbar binders f in
   if not (Formula.eq f' f) then
     report 
@@ -782,10 +782,12 @@ let check_coincidence_bu binders f =
          )
     )
 
-(* Sofar doesn't cause any transmission, so it's probably ok. *)
+(* Sofar doesn't cause any transmission, so it's ok, provided it inherits from a transmissible
+   initial assertion. 
+ *)
 let check_coincidence_formula binders =
   Formula.fold (fun () subf -> match subf.fnode with
-                               | Bfr (_,_, bf) -> check_coincidence_bu binders subf;
+                               | Bfr (_,_, bf) -> check_coincidence_absence binders subf;
                                                   if Formula.exists (is_recU <||> is_recSofar) bf then
                                                     report (Warning (subf.fpos,
                                                                      Printf.sprintf "%s contains _U and/or sofar modalities. \
@@ -795,7 +797,7 @@ let check_coincidence_formula binders =
                                                                     )
                                                            );
                                                   Some ()
-                               | Univ  (_, uf) -> check_coincidence_bu binders subf;
+                               | Univ  (_, uf) -> check_coincidence_absence binders subf;
                                                   Some ()
                                | _             -> None
                )
@@ -817,6 +819,10 @@ let check_coincidence_prog {p_preopt=preopt; p_givopt=givopt; p_ts=threads; p_po
     | Some (poslab,f) -> cca (Some f)
     | _               -> ()
   in
+  (match preopt with
+   | Some (_, initf) -> check_coincidence_absence NameSet.empty initf
+   | None            -> ()
+  );
   ccoa preopt;
   cca givopt;
   ccoa postopt;
