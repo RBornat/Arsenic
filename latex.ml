@@ -521,7 +521,9 @@ let rec latex_of_comtriplet trisep ct =
            latexcommand "ipredouble" None [latex_of_formula pre; latex_of_formula preres],
            " & \\\\ "
      *)
-    | _                                                -> "", ""
+    | false, Embroider, Some pre          ->
+        latexcommand "ipre" None [latex_of_formula pre], "\\ "
+    | _                                   -> "", ""
   in
   lot (fun k -> string_of_pair latex_of_knot id ipre_sep (k, ipre))
       trisep
