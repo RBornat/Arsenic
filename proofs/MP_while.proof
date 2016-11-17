@@ -1,5 +1,3 @@
-# while loops are work in progress.
-
 {aa: f=0}
 ----------------------
 guarantee [true | m:=1; _B(m=1) | f:=1]
